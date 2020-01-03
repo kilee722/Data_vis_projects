@@ -1,0 +1,529 @@
+---
+title: "Midterm Project"
+author: "Ki Min Lee and Alan Kuo"
+date: "10/29/2019"
+output: 
+  html_document:
+    code_foling: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+## Course: 5210 Data Visualization
+## Purpose: Analyze effectiveness of in-store promotions and advertisements & understand how GM is performing relative to competitors 
+## Date: October 29, 2019
+## Authors: Ki Min Lee and Alan Kuo
+
+```
+
+```{r message = FALSE, echo = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE))
+
+# Clear environment of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+
+```
+
+# Project Description
+
++ The midterm project data set includes data on three different cereal brands and its flavors. The companies are General Mills, Kelloggs and Post. The variables include different aspects of cereal sales such as product number, store number of the cereal sold, number of units sold, brand and flavor, packaging, volume size, price and whether there was an in-store promotion or advertisement or both for the product. Our purpose is to work as a team to find several insights on effectiveness of in-store promotions for our manager at General Mills.
+
+# Load Libraries
+
+```{r message = FALSE}
+# Load libraries
+library(tidyverse)
+library(dplyr)
+library(ggplot2) 
+library(gridExtra) # use to put graphs together in the same frame
+library(scales)    # use to improve colors
+library(janitor)  # piping function
+library(sf)       # possible geomap
+library(kableExtra)    # clean table design
+library(GGally) #used to display ggpairs
+library(knitr)
+library(corrplot)
+```
+
+# Load Data
+
+```{r}
+# Load data
+cereal_sales <- read.csv("mtp_data.csv")
+
+```
+
+# Base EDA Step 1: Uni-variate non-Graphical EDA
+
+```{r}
+# View the data
+head(cereal_sales, 10)
+
+```
+
++ Initial questions about data
+
+    - Why does week have four digits? What does it mean?
+    - Does each individual row represent a single purchase?
+    
++ Data looks tidy, ready to start analysis
+
+    - data in each column is of same variable type
+
+```{r}
+# Examine the structure of the data
+str(cereal_sales)
+
+```
+
++ 21,613 observations of 13 variables
+
++ 5 factor variables (UPC, Brand, Flavor, Package, Ad, Promo)
++ Questions about factor variables:
+    
+    - 15 brands and 5 flavors max per brand equates to 75 total different combinations of brand cereals and its flavors. : it's 15 * 5 = 75 different combinations
+    - If that is the case, then why are there more than 75 product numbers? 
+    - Can a brand and a specific flavor have more than one product number? What's the difference?
+    - What qualifies as a small vs. medium ad? Is it amount spent or is it the size of the advertisement? - "not sure if this can be analyzed with only given data."
+    - Are we to assume uniform advertisement effects based on whether it is a medium vs small? (e.g., can we assume General Mill's small advertisements and Kellogg's small advertisements have the same effect?)
+
++ 1 discrete (Units)
+    
+    - Not much information can be provided from the structure of data for these two variables. Need to examine range of values for units.
+
++ 4 continuous (Volume, Price, Iri_key, Week)
+
+    - From the volume variable, I see three different datapoints already (0.06, 0.04 and 0.12). If there are only two types of packaging (box vs. cup) why are there more than two volume sizes? Do box and cup sizes vary by brand?
+    - Why does week have four digits? 
+
+```{r}
+# Examine the descriptive statistics and converting promo to factor variables
+cereal_sales %>% mutate(promoFactor = factor(promo)) %>% summary()
+
+cereal_sales_promo_factor <- cereal_sales %>% mutate(promoFactor = factor(promo))
+
+```
+
++ Data observations
+
+    - units appears to be right-skewed so not symmetric
+       - this means we will use median instead 
+    - UPC 00-01-43000-10521 sells the most. What is this? However, this does not mean it sold the most units. Just the most times it has been registered
+    - Week is symmetrical indicating a potentially steady sales period
+    - Kelloggs Frosted Flakes are number 1 brand sold in this dataset
+    - Regular and Toasted flavors are heavy favorite flavors
+    - Majority of packaging is in boxes
+    - Volume is left skewed, so it is better to use median.
+    - Price is also slightly left skewed
+    - Only a small percentage of products bought had ads
+    - Might be better to convert promo to factor variable for analysis.
+   
++ Questions about the data 
+
+    - Who would buy 28 units of cereal in one purchase? Is this common?
+    - Which cereal is the most expensive? Which cereal is the least expensive? Does it differ based on the store it is sold?
+    - What sold for only 0.250? Is it because of a promotion discount?
+    - Conversely, what sold for $9.99? Isn't this quite expensive? Who would buy it versus the cheaper alternatives and why?
+    - Why are regular and toasted flavors heavily favored? Are the discounted or advertised more?
+    - Why are Kelloggs the most purchased brand? Is their brand name stronger or is it due to promotions and advertisements?
+    
++ Potential research questions / issues
+    
+    - We should look at each brand and how it sells without ads and promotions to determine how the brand influences the price
+    - Which store sold the most number of units? Is it equal across most stores?
+    - Which store had the most advertisements and/or promotions?
+    - Which brand and flavor had the most advertisements and/or promotions?
+    - How did this brand and flavor compare before and after advertisements?
+    - Did that brand and flavor experience higher sales after promotions and advertisements were run (we would check the weeks after the advertisements and promotions were run)
+    - I'd also like to take a look at which stores ran those 4545 total promotions. Is this spread across the different stores? 
+
++ Variables mutated
+
+    - mutated promo to a factor variable as the only values were 0 and 1. 
+    
+# Base EDA Step 2: Uni-variate graphical EDA
+
+Here we will examine each variable individually
+
+## Categorical / Factor Variables
+
+Converting promo into a factor variable and plot as bar graph
+``` {r}
+cereal_sales %>% mutate(promoFactor = factor(promo)) %>% ggplot(mapping = aes(x=promoFactor, fill = promo)) + geom_bar() + geom_text(stat='count', aes(label=..count..), vjust=-1) + scale_y_continuous(limits = c(0, 18300))
+
+```
+
++ converting promo to a factor variable yields a lot more useable insight
+
+    - only a small amount of promotions have been run (4545)
+    - is this value spread across different stores?
+    - what have been the effects of these promotions?
+    - are these specific to only one brand?
+
+```{r}
+# all factor variables together 
+# 5 factor variables (UPC, Brand, Flavor, Package, Ad)
+
+grid.arrange(
+
+    ggplot(data = cereal_sales, mapping = aes(x = UPC)) + geom_bar() , # upc
+
+    ggplot(data = cereal_sales, mapping = aes(x = brand)) + geom_bar(), # brand
+
+    ggplot(data = cereal_sales, mapping = aes(x = flavor)) + geom_bar() + geom_text(stat='count', aes(label=..count..), vjust=-1)  + scale_y_continuous(limits = c(0, 12000)), # flavor
+
+    ggplot(data = cereal_sales, mapping = aes(x = package)) + geom_bar() + geom_text(stat='count', aes(label=..count..), vjust=-1)  + scale_y_continuous(limits = c(0, 27000)), # package
+
+    ggplot(data = cereal_sales, mapping = aes(x = ad)) + geom_bar() + geom_text(stat='count', aes(label=..count..), vjust=-1)  + scale_y_continuous(limits = c(0, 25000)), # ad
+    
+  ncol = 2)
+
+```
+
++ UPC (product number) seems to be very spread out
+
+    - Perhaps we can group UPC and number of units sold to get a better indication of how each individual "product" number is doing
+    - First we have to figure out why identical brands and flavors have more than one product number
+
++ Brands purchased seems to be relatively evenly distributed, besides the top two bars in the middle (which we know is kellogg's)
+
+    - I'd like to combine this with units sold as well so we get a complete picture for brands and total units sold
+    - Which brand appeared the least frequently? Did they sell the least amount of units too?
+
++ flavor, brand and ad are similar to what we have seen in the summary section of the base EDA
+
+    - very little advertisements done out of all number of transactions in the ledger
+    - Do the advertisements run for a significant period of time and as long as the product was purchased during the time, it gets marked as an ad?
+    
++ UPC and brand's x-axis are difficult to read
+
+## Quantitative variables
+
+```{r message = FALSE}
+# continuous quantitative varaibles(volume, price, iri_key, week)
+grid.arrange(
+  # histograms and box plots grouped together
+  ggplot(data = cereal_sales, mapping = aes(x = price)) + geom_histogram() + scale_x_continuous(limit = c(0, 8.5)), # price
+  ggplot(data = cereal_sales, mapping = aes(x = 1, y = price)) + geom_boxplot() + coord_flip(), 
+  
+  ggplot(data = cereal_sales, mapping = aes(x = volume)) + geom_histogram(), # volume    
+  ggplot(data = cereal_sales, mapping = aes(x = 1, y = volume)) + geom_boxplot() + coord_flip(),  
+  
+  ggplot(data = cereal_sales, mapping = aes(x = iri_key)) + geom_histogram(), # sqft lot
+  ggplot(data = cereal_sales, mapping = aes(x = 1, y = iri_key)) + geom_boxplot() + coord_flip(), 
+
+  ggplot(data = cereal_sales, mapping = aes(x = week)) + geom_histogram(), # year built
+  ggplot(data = cereal_sales, mapping = aes(x = 1, y = week)) + geom_boxplot() + coord_flip(),
+  
+  ggplot(data = cereal_sales, mapping = aes(x = units)) + geom_histogram(), # year renovated
+  ggplot(data = cereal_sales, mapping = aes(x = 1, y = units)) + geom_boxplot() + coord_flip(),
+  
+  ncol = 2)
+
+```
+
++ confirms that volume and store number are skewed
+
+    - while iri_key skewness does not provide that much information, it does show that some stores appear more frequently than others as evidenced by the skewness
+    - volume is skewed left as alot of cereal package sizes are below or equal to 1.1 with outliers beginning after 1.5
+
++ week shows data was collected steadily over a period of time
+
+    - there is no skewness in the data and the histogram shows a specific repetitive pattern of data collection
+
++ price has a normal distribution with a few outliers and relatively low skewness
+
+    - seems to be a range of values for price, but centered around 4 as most frequent according to the histogram.
+  
++ units shows an interesting, declining pattern as number of units purchased uncreases
+
+    - interesting to me that the average number of units purchased, per transaction, is around 6 according to the box plot
+    - is there a special promotion (buy 5 get 1 free) or discounts that incentives this?
+    - interesting that there are two noticable gaps in units sold in the histogram
+    
+    
+# Base EDA Step 3: Multi-variate non-graphical EDA
+
+```{r}
+#Not the most efficient code since it has to loop each row, but structurally this made this most sense to me
+for(x in 1:length(cereal_sales$brand)){
+cereal_sales$Company[x] <- ifelse(grepl("GENERAL",cereal_sales$brand[x]),'GM', ifelse(grepl("KELLOGGS",cereal_sales$brand[x]),'Kelloggs', 'Post'))
+}
+
+#cereal_sales %>% mutate(Company = factor(company))
+
+```
+
+# Multi-variate Quantitative Variables EDA
+
+# Multi-variate non-graphical - Quantitative: volume, price, week, key
+```{r}
+cereal_sales %>% select_if(is.numeric) %>%
+  cor() %>%
+  round(2) %>%
+  kable()
+mtp_cor <- cereal_sales %>% select_if(is.numeric) %>%
+  cor() %>%
+  round(2)
+# Nothing particular information is drawn from the correlation table between quantitative data.
+
+```
+```{r}
+# correlation plot for quantitative data
+corrplot(mtp_cor)
+```
+# Multi-variate graphical EDA on quatitative data
+```{r}
+#price vs volume
+cereal_sales %>% ggplot(aes(x = volume, y = price)) + geom_point()
+
+# price vs week
+cereal_sales %>% ggplot(aes(x = week, y = price)) + geom_point()
+
+# price vs iri_key
+cereal_sales %>% ggplot(aes(x = iri_key, y = price)) + geom_point()
+```
+
+```{r}
+# volume vs week
+cereal_sales %>% ggplot(aes(x = volume, y = week)) + geom_point()
+# volume vs iri_key
+cereal_sales %>% ggplot(aes(x = volume, y = iri_key)) + geom_point()
+```
+
+```{r}
+# week vs iri_key
+cereal_sales %>% ggplot(aes(x = week, y = iri_key)) + geom_point()
+```
+
+```{r}
+# brand vs units
+cereal_sales %>% ggplot(aes(x = units, y = price)) + geom_point()
+```
+nothing interesting is found from graphical analysis.
+
+# Multi-variate graphical - categorical and quantitative
+
+```{r}
+# Mix of multi-variate graphs -
+#cereal_sales_no_U <-  cereal_sales[, -1, drop = FALSE]
+#cereal_sales_no_U %>% ggpairs()
+```
+
+```{r}
+ggplot(cereal_sales, aes(x = volume, fill = flavor)) + geom_bar() + coord_flip() + ylim(0, 1000)
+```
+
+```{r}
+# brand + flavor graph
+ggplot(cereal_sales, aes(x = brand, fill = flavor)) + geom_bar() + coord_flip()
+```
+
+```{r}
+# flavor vs volume
+ggplot(cereal_sales, aes(x = volume, fill = flavor)) + geom_bar()
+
+```
+
+```{r}
+# price vs ad boxplot
+ggplot(cereal_sales, aes(x = ad)) + geom_boxplot(aes(y = price))
+
+# Price is not affected by ad
+```
+
+```{r}
+# brand vs ad
+ggplot(cereal_sales, aes(x = brand, fill = ad)) + geom_bar(position = "dodge") + coord_flip()
+
+# All brands share the same proportion of ad. Although Kelloggs has the highest number of ad, the effect of ad on sales has not been ascertained. 
+```
+
+```{r}
+
+# brand vs units
+ggplot(cereal_sales, aes(x = brand, y = units)) + geom_point() + ylim(0, 50) + coord_flip()
+```
+
+```{r}
+# package vs volume boxplot
+ggplot(cereal_sales, aes(x = package, y = volume)) + geom_boxplot()
+```
+
+```{r}
+# brand vs volume
+ggplot(cereal_sales, aes(x = brand, y = volume)) + geom_boxplot() + coord_flip()
+```
+
+```{r}
+# brand vs package
+ggplot(cereal_sales, aes(x = brand, fill = package)) + geom_bar(position = position_dodge(preserve = "single")) + coord_flip() 
+```
+```{r}
+# Promo effect across different flavors
+ggplot(cereal_sales_promo_factor, aes(x = flavor, fill = promoFactor)) + geom_bar(position = position_dodge(preserve = "single")) + coord_flip() 
+
+# ad effect across different flavors
+ggplot(cereal_sales_promo_factor, aes(x = flavor, fill = ad)) + geom_bar(position = position_dodge(preserve = "single")) + coord_flip() 
+```
+
+```{r}
+# add revenue to the data
+for(x in 1:length(cereal_sales$units)){cereal_sales$revenue[x] <- (cereal_sales$units[x] * cereal_sales$price[x])}
+```
+
+
+
+```{r}
+cereal_sales_p <- cereal_sales %>% mutate(promo = factor(promo))
+
+
+#filter the top 2 products of sales
+
+target_top <- c("KELLOGGS FROSTED FLAKES", "KELLOGGS FROOT LOOPS")
+
+top <- cereal_sales_p %>% filter(brand %in% target_top)
+
+excl_top <- cereal_sales_p %>% filter(!brand %in% target_top)
+
+# filter the bottom 2 products of sales
+
+target_bot <- c("KELLOGGS COCOA KRISPIES", "GENERAL MILLS COCOA PUFFS")
+
+bot <- cereal_sales_p %>% filter(brand %in% target_bot)
+
+excl_bot <- cereal_sales_p %>% filter(!brand %in% target_bot)
+
+# filter the rest in the middle sales
+mid <- cereal_sales_p %>% filter(!brand %in% target_top) %>% filter(!brand %in% target_bot)
+```
+
+top
+```{r}
+ggplot(top, aes(x = brand, fill = promo)) + geom_bar(position = "dodge")
+
+ggplot(bot, aes(x = brand, fill = promo)) + geom_bar(position = "dodge")
+
+ggplot(mid, aes(x = brand, fill = promo)) + geom_bar(position = "dodge")
+```
+
+
+```{r}
+ggplot(top, aes(x = brand, fill = ad)) + geom_bar(position = "dodge") + coord_flip()
+
+ggplot(bot, aes(x = brand, fill = ad)) + geom_bar(position = "dodge") + coord_flip()
+
+ggplot(mid, aes(x = brand, fill = ad)) + geom_bar(position = "dodge") + coord_flip()
+```
+
+
+
+```{r}
+cereal_sales %>% group_by(brand, revenue) %>% summarize(medRev = median(revenue, na.rm = TRUE)) %>% ggplot(aes(x = brand, y = medRev)) + geom_boxplot() + coord_flip()
+
+ggplot(cereal_sales, aes(x = brand, y = revenue)) + geom_boxplot() + coord_flip()
+```
+
+```{r}
+frost_flakes <- cereal_sales %>% filter(brand %in% "KELLOGGS FROSTED FLAKES") 
+
+cheerios <- cereal_sales %>% filter(brand %in% "GENERAL MILLS CHEERIOS")
+
+summarize(frost_flakes, stat = sum(revenue))
+summarize(cheerios, stat = sum(revenue))
+```
+
+```{r}
+ggplot(top, aes(x = brand, fill = promo)) + geom_bar(position = "dodge") + coord_flip()
+
+ggplot(bot, aes(x = brand, fill = promo)) + geom_bar(position = "dodge") + coord_flip()
+```
+
+```{r}
+# analysis across flavor
+regular <- cereal_sales %>% filter(flavor %in% "REGULAR")
+toasted <- cereal_sales %>% filter(flavor %in% "TOASTED")
+
+summarize(regular, stat = sum(revenue))
+summarize(toasted, stat = sum(revenue))
+
+ggplot(regular, aes(x = revenue, fill = promo)) + geom_bar(position = "dodge") + coord_flip()
+
+ggplot(toasted, aes(x = brand, fill = promo)) + geom_bar(position = "dodge") + coord_flip()
+```
+
+```{r}
+# no promo vs. with promo
+
+no_promo <- cereal_sales %>% filter (promo %in% 0) 
+yes_promo <- cereal_sales %>% filter (promo %in% 1)
+
+r_no_promo <- sample_n(no_promo, 1000)
+r_yes_promo <- sample_n(yes_promo, 1000)
+r_cereal_sales <- sample_n(cereal_sales, 1000)
+
+ggplot(r_no_promo, aes(x = revenue)) + geom_histogram() + coord_flip()
+
+ggplot(r_yes_promo, aes(x = revenue)) + geom_histogram() + coord_flip()
+
+ggplot(r_cereal_sales, aes(x = revenue)) + geom_histogram() + coord_flip()
+
+summarize(r_no_promo, stat = sum(revenue))
+summarize(r_yes_promo, stat = sum(revenue))
+summarize(r_cereal_sales, stat = sum(revenue))
+```
+```{r}
+GM <- cereal_sales %>% filter(brand %in% "GENERAL MILLS") %>% filter(promo %in% 0)
+```
+
+```{r}
+#revenue for ad A vs ad B in all GM cereals NO promotion
+cereal_sales %>%
+  filter(Company %in% "GM") %>%
+  filter(promo %in% 0) %>%
+  filter(ad %in% c("A","B")) %>%  
+  group_by(flavor, ad) %>%
+  summarise(sumRev = sum(revenue, na.rm=FALSE)) %>%
+  ggplot(aes(x = flavor, y = sumRev, fill = ad)) + geom_bar(position = "dodge", stat = "identity") + scale_y_continuous(limit = c(0, 4700))
+
+#revenue for ad A vs ad B in all GM cereals YES promotion
+cereal_sales %>%
+  filter(Company %in% "GM") %>%
+  filter(promo %in% 1) %>%
+  filter(ad %in% c("A","B")) %>%  
+  group_by(flavor, ad) %>%
+  summarise(sumRev = sum(revenue, na.rm=FALSE)) %>%
+  ggplot(aes(x = flavor, y = sumRev, fill = ad)) + geom_bar(position = "dodge", stat = "identity") + scale_y_continuous(limit = c(0, 4700))
+```
+
+
+```{r}
+#Kelloggs
+#revenue for ad A vs ad B in all GM cereals NO promotion
+cereal_sales %>%
+  filter(Company %in% "Kelloggs") %>%
+  filter(promo %in% 0) %>%
+  filter(ad %in% c("A","B")) %>%  
+  group_by(flavor, ad) %>%
+  summarise(sumRev = sum(revenue, na.rm=FALSE)) %>%
+  ggplot(aes(x = flavor, y = sumRev, fill = ad)) + geom_bar(position = "dodge", stat = "identity") + ggtitle("NO PROMOTIONS") + scale_y_continuous(limit = c(0, 7500))
+
+#revenue for ad A vs ad B in all GM cereals YES promotion
+cereal_sales %>%
+  filter(Company %in% "Kelloggs") %>%
+  filter(promo %in% 1) %>%
+  filter(ad %in% c("A","B")) %>%  
+  group_by(flavor, ad) %>%
+  summarise(sumRev = sum(revenue, na.rm=FALSE)) %>%
+  ggplot(aes(x = flavor, y = sumRev, fill = ad)) + geom_bar(position = "dodge", stat = "identity") + ggtitle("YES PROMOTIONS") + scale_y_continuous(limit = c(0, 7500))
+
+#Kelloggs
+#Trend 1 - For cocoa and Fruit, both A and B advertisement revenue increase with promotions
+#Trend 2 - Regular flavor "A" advertisement revenue drops slightly from no promotion -> promotion
+#Trend 3 - Ads A and B for toasted flavor both increase significantly with promotions
+#Trend 4 - Especially for regular and toasted flavor, Revenue for B advertisements seems to increase SIGNIFICANTLY with promotions
+```

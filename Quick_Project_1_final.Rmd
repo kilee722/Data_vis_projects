@@ -1,0 +1,959 @@
+---
+title: 'Quick Project # 1 : To analyze a set of Zillow Data'
+author: Ki Min Lee / Sakshi Madan 
+date: October 14, 2019
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+# Clear the packages
+
+```{r}
+# Clear environment of variables and functions
+rm(list = ls(all=TRUE))
+
+
+# Clear environment of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+```
+
+# Installing the libraries
+
+```{r}
+library(tidyverse)
+library(scales)
+library(gridExtra)
+library(janitor)
+library(GGally)
+library(janitor)
+library(reshape)
+library(corrplot)
+library(grid)
+library(colorspace)
+```
+
+# Load and transform data
+
+```{r message = FALSE}
+
+# Loading the data
+house_sale <- read.csv("/Users/klee1/OneDrive/Desktop/School/BUAN5210/QP1/qp1_data.csv")
+```
+
+```{r}
+# Transforming the data
+house_sale$price_1000 <- house_sale$price/1000
+house_sale$waterfront =as.factor(house_sale$waterfront)
+house_sale$zip_code =as.factor(house_sale$zip_code)
+
+house_sale$sqft_living_1000 <- house_sale$sqft_living/1000
+
+mymode <- function(x) {
+                 t <- table(x)
+                 names(t)[ which.max(t) ]
+           }
+```
+
+  + Using watefront and zipcode as factor variables 
+  
+# Base EDA Step 1: Uni-variate non-graphical EDA
+
+```{r message = FALSE}
+
+# Head of the data
+head(house_sale)
+
+# Summary of the data
+summary(house_sale)
+
+# Structure of the data
+str(house_sale)
+
+```
+
+  + Price variables is skewed so will consider median
+  + We don't have a lot of data for waterfront houses
+  + Number of houses seem to have sold uniformly among top 6 zipcodes
+  
+# Base EDA Step 2: Uni-variate graphical EDA
+
+## Quantitative Variables
+
+```{r message = FALSE}
+
+# Uni-variate for price_1000
+
+grid.arrange(
+
+  ggplot(data = house_sale, mapping = aes(x = price_1000)) + 
+    geom_histogram(bins = 10) + 
+    xlim(0, 2000) +
+    theme_classic() +
+    labs(x = "Price in thousands", y = ""),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = price_1000)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Price in thousands") +
+    ylim(0, 2000)
+  
+)
+
+```
+  
+  + Price is not evenly distributed , there is a huge difference between minimum and maximum
+  + There is more demand for cheaper houses $500K
+  + for Price > 1000K - means they are high prices, may be some particular zipcodes have those type of communities?
+
+```{r message = FALSE}
+
+# Uni-variate for sqft_living
+
+grid.arrange(
+
+  ggplot(data = house_sale, mapping = aes(x = sqft_living)) + 
+    geom_histogram(bins = 10) + 
+    xlim(0, 5000) +
+    theme_classic() +
+    labs(x = "Living space in sqft", y = ""),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = sqft_living)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Living space in sqft") +
+    ylim(0, 5000)
+  
+)
+
+```
+  
+  + Sqft_living is similar to the price distribution which means: Houses < $500K are sold the most and Living 
+  Space < 1900Sqft are sold the most 2) House sale with Price > $500K starts to decrease and houses with 
+  living space > 1900Sqft starts to decrease
+  + Is this trend same across all types of bedrooms/bathrooms/floors/grade/condition/zipcodes?
+  + Mean is almost equal to median
+
+```{r message = FALSE}
+
+# Uni-variate for sqft_lot
+
+grid.arrange(
+
+  ggplot(data = house_sale, mapping = aes(x = sqft_lot)) + 
+    geom_histogram(bins = 10) + 
+    xlim(0, 20000) +
+    theme_classic() +
+    labs(x = "Lot in sqft", y = ""),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = sqft_lot)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Lot in sqft") +
+    ylim(0, 20000)
+  
+)
+
+
+```
+
+  + Median < Mean
+  
+  + There are less number of houses sold with big lots and more number of houses sold with smaller lot size
+  
+```{r message = FALSE}
+
+# Uni-variate for Year Built
+
+grid.arrange(
+
+  ggplot(data = house_sale, mapping = aes(x = yr_built)) + 
+    geom_histogram(bins = 10) + 
+    theme_classic() +
+    labs(x = "Year Built", y = ""),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = yr_built)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Year Built")
+    #ylim(0, 20000)
+  
+)
+
+# Uni-variate for Year Renovated
+
+grid.arrange(
+
+  ggplot(data = house_sale, mapping = aes(x = yr_renovated)) + 
+    geom_histogram(bins = 10) + 
+    theme_classic() + 
+    labs(x = "Year Renovated", y = ""),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = yr_renovated)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Year Renovated")
+    
+  
+)
+
+# Uni-variate for bedrooms
+
+grid.arrange(
+  
+  ggplot(data = house_sale, mapping = aes(x = bedrooms)) + 
+    geom_bar(bins = 10) + expand_limits(xlim = 10) +
+    labs(x = "Bedrooms", y = "") +
+    theme_classic() +
+    xlim(0,10),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = bedrooms)) +
+    coord_flip() +
+    labs(x = " ", y = "Bedrooms") +
+    theme_classic() +
+    ylim(0, 10), 
+  
+  ncol = 1
+  
+)
+
+# Uni-variate for bathrooms
+
+  
+grid.arrange(
+  
+  ggplot(data = house_sale, mapping = aes(x =  bathrooms)) + 
+    geom_bar(bins = 10) + 
+    labs(x = "Bathrooms", y = "") +
+    theme_classic() +
+    xlim(0,5),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = bathrooms)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Bathrooms") +
+    ylim(0, 5), 
+  
+  ncol = 1
+  
+)
+
+# Uni-variate for floors
+
+  
+grid.arrange(
+  
+  ggplot(data = house_sale, mapping = aes(x = floors)) + 
+    geom_bar(bins = 10) + 
+    labs(x = "Floors", y = "") +
+    theme_classic() +
+    xlim(0,5),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = floors)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Floors") +
+    ylim(0, 5),
+  
+  ncol = 1
+  
+)
+
+# Uni-variate for view
+
+  grid.arrange(
+  
+  ggplot(data = house_sale, mapping = aes(x = view)) + 
+    geom_bar(bins = 10) + 
+    labs(x = "View", y = "") +
+    theme_classic() +
+    xlim(-1,10),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = view)) +
+    coord_flip() +
+    labs(x = " ", y = "Floors") +
+    theme_classic() +
+    ylim(-1, 10),
+  
+  ncol = 1
+  
+  )
+
+  # Uni-variate for grade
+
+ grid.arrange(
+  
+  ggplot(data = house_sale, mapping = aes(grade)) + 
+    geom_bar(bins = 10) + 
+    labs(x = "Grade", y = "") +
+    theme_classic() +
+    xlim(5,10),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = grade)) +
+    coord_flip() +
+    labs(x = " ", y = "Grade") +
+    theme_classic() +
+    ylim(5, 10), 
+  
+  ncol = 1
+  
+ )
+
+# Uni-variate for condition
+
+  grid.arrange(
+  
+  ggplot(data = house_sale, mapping = aes(x = condition)) + 
+    geom_bar(bins = 10) + 
+    labs(x = "Condition", y = "") +
+    theme_classic() +
+    xlim(0,5),
+  
+  ggplot(data = house_sale, mapping = aes(x = 1)) +
+    geom_boxplot(mapping = aes(y = condition)) +
+    coord_flip() +
+    theme_classic() +
+    labs(x = " ", y = "Condition") +
+    ylim(0, 5), top = "Uni-variate for Condition",
+  
+  ncol = 1
+
+)
+
+```
+  
+  + Maximum number of houses sold are with bedrooms 3 and 4
+  + Maximum number os houses sold are with bathrooms 2.5
+  + Maximum number os houses sold are with 1 floor
+  + We don't have much data for houses with view
+  + Grade 7 and Condition 3 houses are sold the most
+  + Does this pattern of different variables remain the same for high priced houses > 1000k?
+
+## Categorical Variables
+
+```{r message = FALSE}
+
+# Uni-variate for waterfront
+
+  ggplot(data = house_sale, mapping = aes(x=waterfront)) +
+    geom_bar() +
+    theme_classic() +
+    labs(x = "Waterfront", y = "" )
+
+
+```
+  
+  + As before, we don't have a lot of data for waterfront houses, we may not consider this variable later
+
+```{r message = FALSE}
+
+# Uni-variate for zip_code
+
+  ggplot(data = house_sale, mapping = aes(x=zip_code)) +
+    geom_bar() +
+    theme_classic() +
+    labs(x = "ZipCode", y = "")
+
+
+```
+
+  \
+  + Houses are sold within a large number of zipcodes
+  + We are curious about high prices communities, which we are going to dig deep in
+  
+# Base EDA Step 3: Multi-variate non - graphical 
+
+## Categorical
+
+```{r message = FALSE}
+
+
+house_sale %>% tabyl(zip_code, waterfront) %>% 
+  adorn_totals(where = c("row", "col"))
+
+```
+
+  + The houses with waterfronts are just 0.75% of the total houses, hence we may neglect the waterfront data
+  
+##  Quantitative
+
+```{r message = FALSE}
+
+house_sale_filter <- house_sale[,c(14,2,3,4,5,6,9,10,11)]
+house_sale_filter_cor <- cor(house_sale_filter)
+house_sale_filter_cor
+
+
+``` 
+
+  + The strong correlation between price_1000 and sqft_living is quite visible here
+  + Is this correlation of price_1000 and sqft_living remains true amongst other strongly correlated variables bathrooms & grade?
+  
+#  Base EDA Step 4: Multi-variate graphical 
+
+## Categorical
+
+```{r}
+
+target_zip <- c(98103,98038,98115,98052,98117,98042)
+
+house_sale %>% 
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = zip_code, y = 1, fill = waterfront))+
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  labs(x = "Zipcode", y ="")
+
+```
+
+
+
+  + We have taken the top 6 zipcodes here and found out the same thing is waterfront houses are negligible as compared to others
+  
+## Quantitative
+
+```{r message = FALSE}
+
+#Correlation plot between all quantitative variables
+
+house_sale_filter <- house_sale[, c(14, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12)]
+corrplot(house_sale_filter_cor)
+
+```
+
+  + Shows a strong correlation between variables Price_1000 & Sqft_Living. Does the relation hold strong amongst other strong variables bathrooms & grade?
+
+```{r message = FALSE}
+
+# Multivariate between price & sqft_living 
+house_sale %>% 
+  ggplot(mapping = aes(x = sqft_living, y = price_1000)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Sqft Living", y = "Sqft Price")
+
+# Multivariate between price & bathrooms
+house_sale %>% 
+  ggplot(mapping = aes(x = bathrooms, y = price_1000)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Bathrooms", y = "Price")
+
+# Multivariate between price and grades
+house_sale %>% 
+  ggplot(mapping = aes(x = grade, y = price_1000)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Grade", y = "Price in thousands")
+
+# Multivariate between sqft_living and bathrooms
+house_sale %>% 
+  ggplot(mapping = aes(x = bathrooms, y = sqft_living)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Bathrooms", y = "Sqft Living")
+  
+# Multivariate between sqft_living and grades
+house_sale %>% 
+  ggplot(mapping = aes(x = grade, y = sqft_living)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Grade", y = "Sqft Living")
+  
+# Multivariate between bathrooms and grades
+house_sale %>% 
+  ggplot(mapping = aes(x = grade, y = bathrooms)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Grade", y = "Bathrooms")
+
+
+```
+
+  + Here we have taken 4 variables which we found as correlated as above
+  + A strong correlation between all 4 variables looking at the line
+  + We are going to dig deep into this
+
+## Categorical and Quantitative
+
+```{r message = FALSE}
+# Multivariate between zipcodes and quantitative variables
+
+grid.arrange(
+  
+house_sale %>%
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = zip_code, fill = as.factor(bedrooms))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Bedrooms across Zipcodes", y = "") + 
+  theme(legend.position = "none"),
+
+house_sale %>%
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = zip_code, fill = as.factor(bathrooms))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Bathrooms across Zipcodes", y = "") +
+  theme(legend.position = "none")
+
+)
+
+grid.arrange(
+
+house_sale %>%
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = zip_code, fill = as.factor(floors))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Floors across Zipcodes", y = "") +
+  theme(legend.position = "none"),
+
+house_sale %>%
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = zip_code, fill = as.factor(grade))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Grades across Zipcodes", y = "") +
+  theme(legend.position = "none"),
+
+house_sale %>%
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = zip_code, fill = as.factor(condition))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Condition across Zipcodes", y = "") +
+  theme(legend.position = "none")
+
+
+)
+
+house_sale %>%
+  filter(zip_code %in% target_zip) %>%
+  ggplot(mapping = aes(x = price_1000, fill = zip_code)) +
+  geom_histogram(position = "dodge") +
+  facet_wrap(~ zip_code) +
+  labs(x = "Price distirbution across Zipcodes", y = "")
+ 
+
+```
+
+  + We have considered top 6 zipcodes (which have highest sale)
+  
+  + Shows zipcodes have similar patterns for some variables (Bedrooms, Grades, Conditions), not all
+  
+  + Looks like the price distribution is not even among them
+  
+  + We also want to find out high prices communites, price_1000 > 1000k and do this analysis for them
+  
+
+# Detailed EDA : Questions raised in Base EDA
+
+## Does the relation between Price, Sqft living, Bathrooms & Grades hold strong amongst each other??
+  
+```{r message = FALSE}
+
+# Multivariate between strongly correlated variables price_1000,  sqft_living, bathrooms and grades
+
+final_graph_1 <- grid.arrange(
+  
+house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = sqft_living, color = bathrooms)) +
+  geom_point() + theme_classic() +
+  geom_smooth(method = lm) + 
+  labs(x = "Price in thousands", y = "Sqft Living"),
+
+house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = sqft_living, color = grade)) +
+  geom_point() + theme_classic() +
+  geom_smooth(method = lm) + 
+  labs(x = "Price in thousands", y = "Sqft Living"),
+
+house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = grade, color = bathrooms)) +
+  geom_point() + theme_classic() +
+  geom_smooth(method = lm) + 
+  labs(x = "Price in thousands", y = "Grade"), 
+
+house_sale %>% 
+  ggplot(mapping = aes(x = price, y = grade, color = sqft_living)) +
+  geom_point() + theme_classic() +
+  geom_smooth(method = lm) + 
+  labs(x = "Price in thousands", y = "Grade"), top = "Relation between Price, Sqft Living, Bathrooms & Grade"
+
+)
+
+final_graph_1
+
+ggsave(filename = "final_graph_1.png", plot = final_graph_1)
+
+```
+
+  + Since there is a very similar slope between all 4 indicates, we can say that there is a very strong relationship
+  + How about the outliers in these graphs? These look like the high priced neighborhoods, can we check which zipcodes belong     in them?
+  
+## Which zipcodes have the maximum high price houses? Does the pattern of quantitative variables remain same for high priced houses > 1000k?
+
+```{r}
+
+house_high <- house_sale %>% filter(price_1000 > 1000)
+summarise(house_high, mymode(zip_code))
+
+house_high_freq <- count(house_high, zip_code)
+house_high_freq %>% filter(n>100)
+
+target_high_zip <- c(98004,98006,98040,98112)
+
+final_graph_2 <- grid.arrange(
+  
+  house_sale %>%
+  ggplot(mapping = aes(x =  bedrooms)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Bedrooms", y = "") +
+  theme_classic() +
+  xlim(0,5),
+  
+  house_sale %>% 
+  filter(zip_code %in% target_high_zip) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  #top = "Comparison of 'Bedrooms' distribution with High Priced Areas",
+
+  
+  house_sale %>%
+  ggplot(mapping = aes(x = grade)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Grade", y = "") +
+  theme_classic() +
+  xlim(5,10),
+  
+  house_sale %>% 
+  filter(zip_code %in% target_high_zip) %>%
+  ggplot(mapping = aes(x = grade)) +
+  geom_bar(stat = "count") +
+  labs(x = "Grades", y="") +
+  xlim(5,10) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code), 
+  top = "Comparison of 'Bedrooms' and 'Grade' distribution with High Priced Areas",
+  
+  ncol = 2
+) 
+
+final_graph_2
+ 
+ggsave(filename = "final_graph_2.png", plot = final_graph_2)
+ 
+```
+
+  + We found out that 98004, 98006, 98040 and 98112 fall among the 4 top high priced zipcodes
+  + Did not consider year_renovated & view because of lesser data as compared to others, but we compared all the variables 
+    amongst high valued zipcodes and concluded:
+  + We see that high priced houses have more of 4 bedrooms
+  + We also see that they have more of grade 8 houses 
+  + Also, definitely they have bigger sqft_livng and sqft_lot
+
+# Summary
+
+  + We need more data to analyze Waterfront Houses, Views, Year Renovated
+  + Strong correlation between price and sq_ft which holds true amongst bathrooms and grades
+  + Price Distribution varies for zipcodes
+  + Zip Code 98004 98006, 98040, 98112 fall amongst high priced neighborhood 
+  + FOr high priced houses, we found that people prefer 4 bedroom and grade 8 houses as compared to 3 and 7 respectively.
+
+```{r}
+
+house_high <- house_sale %>% filter(price_1000 > 1000)
+summarise(house_high, mymode(zip_code))
+
+house_high_freq <- count(house_high, zip_code)
+house_high_freq %>% filter(n>100)
+
+target_high_zip <- c(98004,98006,98040,98112)
+
+final_graph_2 <- grid.arrange(
+  
+  house_sale %>%
+  ggplot(mapping = aes(x =  bedrooms, fill = bedrooms)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Bedrooms", y = "") +
+  theme_classic(),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98004) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98006) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98040) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98112) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()), ncol = 5, nrow = 1 
+)
+  #top = "Comparison of 'Bedrooms' distribution with High Priced Areas",
+```
+
+```{r}
+house_high <- house_sale %>% filter(price_1000 > 1000)
+summarise(house_high, mymode(zip_code))
+
+house_high_freq <- count(house_high, zip_code)
+house_high_freq %>% filter(n>100)
+
+target_high_zip <- c(98004,98006,98040,98112)
+
+final_graph_2 <- grid.arrange(
+  
+  house_sale %>%
+  ggplot(mapping = aes(x =  bedrooms)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Bedrooms", y = "") +
+  theme_classic() +
+  xlim(0,5),
+  
+  house_sale %>% 
+  filter(zip_code %in% target_high_zip) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  #top = "Comparison of 'Bedrooms' distribution with High Priced Areas",
+
+  
+  house_sale %>%
+  ggplot(mapping = aes(x = grade, fill = grade)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Grade", y = "") +
+  theme_classic() + scale_fill_manual(values = c("gray", "gray", "red", "gray", "gray"), guide = FALSE) + 
+  xlim(5,10),
+  
+  house_sale %>% 
+  filter(zip_code %in% target_high_zip) %>%
+  ggplot(mapping = aes(x = grade)) +
+  geom_bar(stat = "count") +
+  labs(x = "Grades", y="") +
+  xlim(5,10) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code), 
+  top = "Comparison of 'Bedrooms' and 'Grade' distribution with High Priced Areas",
+  
+  ncol = 2
+) 
+
+final_graph_2
+```
+
+
+
+```{r}
+
+house_high <- house_sale %>% filter(price_1000 > 1000)
+summarise(house_high, mymode(zip_code))
+
+house_high_freq <- count(house_high, zip_code)
+house_high_freq %>% filter(n>100)
+
+target_high_zip <- c(98004,98006,98040,98112)
+
+final_graph_2 <- grid.arrange(
+  
+  house_sale %>%
+  ggplot(mapping = aes(x =  bedrooms)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Bedrooms", y = "") +
+  theme_classic(),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98004) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98006) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98040) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
+  facet_wrap(~ zip_code),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98112) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()), ncol = 5, nrow = 1 
+)
+  #top = "Comparison of 'Bedrooms' distribution with High Priced Areas",
+```
+
+```{r}
+
+house_high <- house_sale %>% filter(price_1000 > 1000)
+summarise(house_high, mymode(zip_code))
+
+house_high_freq <- count(house_high, zip_code)
+house_high_freq %>% filter(n>100)
+
+target_high_zip <- c(98004,98006,98040,98112)
+
+final_graph_2 <- grid.arrange(
+  
+  house_sale %>%
+  ggplot(mapping = aes(x =  bedrooms)) + 
+  geom_bar(bins = 10) +
+  labs(x = "Bedrooms", y = "") +
+  theme_classic() + xlim(0,5) + theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98004) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98006) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98040) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()),
+  
+  house_sale %>% 
+  filter(zip_code %in% 98112) %>%
+  ggplot(mapping = aes(x = bedrooms)) +
+  geom_bar(stat = "count") +
+  labs(x = "Bedrooms", y="") +
+  xlim(0,5) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()), ncol = 5, nrow = 1 
+)
+  #top = "Comparison of 'Bedrooms' distribution with High Priced Areas",
+```
+
+```{r}
+house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = grade, color = bathrooms)) +
+  theme_classic() +
+  geom_smooth(method = lm) + 
+  labs(x = "Price in thousands", y = "Grade")
+```
+
+```{r}
+house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = sqft_living)) + 
+  ggplot(mapping = aes(x = price_1000, y = condition)) + geom_smooth(method = lm, se =FALSE, fullrange = TRUE) +
+ + theme_classic() +
+  geom_smooth(method = lm) + 
+  labs(x = "Price in thousands", y = "Sqft Living")
+```
+
+```{r}
+
+
+a <- house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = grade)) + geom_smooth(method = lm) + theme_classic() + labs(x = "Price in thousands", y = "Grade")
+  
+b <- house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = sqft_living)) + geom_smooth(method = lm) + theme_classic() + 
+  labs(x = "Price in thousands", y = "sqft_living")
+  
+c <- house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = bathrooms)) + geom_smooth(method = lm) + theme_classic() +
+  labs(x = "Price in thousands", y = "bathrooms")
+
+a
+b
+c
+
+ggarrange(a, b, c)
+```
+
+```{r}
+
+  geom_line(house_sale, mapping = aes(x = price_1000, y = grade, color = "green")) + geom_line(house_sale, aes(x = price_1000, y = sqft_living, color = "red")) + geom_line(house_sale, aes(x = price_1000, y = bathrooms, color = "blue")) 
+  
+b <- house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = sqft_living)) + geom_smooth(method = lm) + theme_classic() + 
+  labs(x = "Price in thousands", y = "sqft_living")
+  
+c <- house_sale %>% 
+  ggplot(mapping = aes(x = price_1000, y = bathrooms)) + geom_smooth(method = lm) + theme_classic() +
+  labs(x = "Price in thousands", y = "bathrooms")
+  
+a
+b
+c
+
+ggarrange(a, b, c)
+```
+
+```{r}
+ggplot() + geom_smooth(data = house_sale, aes(x = price_1000, y = grade), fill = "blue", colour = "darkblue", size = 1, method = 'lm', se = FALSE) + geom_smooth(data = house_sale, aes(x = price_1000, y = sqft_living_1000), fill = "red", colour = "red", size =1, method = 'lm', se = FALSE) + geom_smooth(data = house_sale, aes(x = price_1000, y = bathrooms), fill = "green", colour = "green", size = 1, method = 'lm', se = FALSE) + labs(x = "price_1000", y = "count")
+```

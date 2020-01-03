@@ -1,0 +1,82 @@
+---
+title: "Mean Boxes sold sorted by Ad, Promotion and Volume----Continue promotions, but examine individual brand performance (Bad Visuals)"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    
+---
+
+```{r echo = FALSE}
+# Course: 5210 Communicating Data
+# Purpose: Illustrate a poorly designed dashboard
+# Date: August 5, 2019
+# Author: Gareth Green
+
+```
+
+```{r echo = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE)) 
+
+# Clear environmet of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+
+```
+
+
+```{r setup, include=FALSE}
+
+# Load packages
+library(tidyverse)
+library(dplyr)
+library(ggplot2) 
+library(gridExtra) # use to put graphs together in the same frame
+library(scales)    # use to improve colors
+library(janitor)  # piping function
+library(sf)       # possible geomap
+library(kableExtra)    # clean table design
+library(GGally) #used to display ggpairs
+library(knitr)
+library(treemapify)
+library(ggthemes)
+```
+
+```{r}
+# Load data
+toy <- read.csv("toy_dataset.csv")
+
+popl <- data.frame("City" = c("New York City", "Los Angeles", "San Diego", "Mountain View", "Boston", "Austin", "Washington D.C.", "Dallas"), "Population_in_1000" = c(8623, 4000, 1420, 81, 685, 951, 633, 1341))
+```
+    
+Row 
+-----------------------------------------------------------------------
+
+### Contact Rate
+
+```{r}
+ggplot(toy, aes(x = reorder(City, table(City)[City]))) + geom_bar(aes(fill = City)) + theme_classic() + scale_fill_manual(values = c("gray", "gray", "green", "gray", "purple", "light blue", "red", "gray"), guide = FALSE) +  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) +
+  labs(title = "Toy Sales of Major Cities", subtitle = "Toy Sales Records of 8 Different Major Cities Across United States", y = "Toy Sales" , x = "City")
+```
+
+### Average Rating 
+
+```{r}
+ggplot(toy, aes(x = reorder(City,Income), y = Income)) + geom_bar(position = 'dodge', stat = 'summary', fun.y = 'mean', aes(fill=City)) + 
+  theme_classic() + scale_fill_manual(values = c("gray", "gray", "green", "gray", "purple", "light blue", "red", "gray"), guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) + labs(title = "Average Income of Major Cities", subtitle = "Mean Income of 8 Different Major Cities Across United States", y = "Average Income" , x = "City")
+```
+
+### Cancellations
+
+```{r}
+ggplot(popl, aes(x = reorder(City,Population_in_1000), y = Population_in_1000)) + geom_bar(position = 'dodge', stat = 'summary', fun.y = 'mean', aes(fill=City)) + theme_classic() + scale_fill_manual(values = c("gray", "gray", "green", "gray", "purple", "light blue", "red", "gray"), guide = FALSE) + theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) + labs(title = "Population of Major Cities", subtitle = "Toy Sales Records of 8 Different Major Cities Across United States", y = "Population" , x = "City")
+```
+
+
+Inputs {.sidebar}
+-------------------------------------
+```{r}
+#I
+#LOVE 
+#YOU
+```

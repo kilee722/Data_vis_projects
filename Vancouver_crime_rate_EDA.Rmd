@@ -1,0 +1,1189 @@
+---
+title: "Vancouver Crime Report"
+author: "Ki Min Lee"
+date: "12/06/2019"
+output: 
+  html_document:
+    cold_folding: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load library
+library(tidyverse)
+library(dplyr)
+library(ggplot2) 
+library(gridExtra) # use to put graphs together in the same frame
+library(scales)    # use to improve colors
+library(janitor)  # piping function
+library(sf)       # possible geomap
+library(kableExtra)    # clean table design
+library(GGally) #used to display ggpairs
+library(knitr)
+library(treemapify)
+library(ggthemes)
+library(shiny)
+library(vctrs)
+library(MultNonParam) # hypothesis testing for median
+library(ggforce)
+library(cowplot)
+library(egg)
+library(formattable)
+library(inspectdf) # New package employeed for base EDA
+#library(DataExplorer)
+#library(treemap)
+library(maps)
+library(mapdata)
+library(maptools)
+library(mapproj)
+library(MASS)
+library(RgoogleMaps)
+library(RColorBrewer)
+library(plotGoogleMaps)
+library(shiny)
+library(leaflet)
+
+devtools::install_github("dkahle/ggmap", ref = "tidyup")
+```
+
+```{r}
+# set theme
+theme_set(
+  theme_minimal() +
+    theme(legend.position = "right")
+  )
+
+custom.col <- c("#FFDB6D", "#C4961A", "#F4EDCA", 
+                "#D16103", "#C3D7A4", "#52854C", "#4E84C4", "#293352")
+scale_fill_manual(values = c("#00AFBB", "#E7B800", "#FC4E07", "#D16103"))
+
+
+```
+
+```{r}
+# data import
+crime <- read.csv("crime.csv")
+```
++ Data of crimes in Vancouver(Canada) from 2003 to 2017
+
++ Data obtained from kaggle.com, originally comes from the Vancouver Open Data Catalogue, extracted on 2017-2018 with 530652 records between 2003-01-01 and 2017-07-13
+
+  - 1.TYPE: Type of Crime
+  - 2.YEAR: Year when the reported crime activity occurred
+  - 3.MONTH: Month when the reported crime activity occurred
+  - 4.DAY: Day when the reported crime activity occurred
+  - 5.HOUR: Hour when the reported crime activity occurred
+  - 6.MINUTE: Minute when the reported crime activity occurred
+  - 7.HUNDRED_BLOCK: Generalized location of the reported crime activity
+  - 8.NEIGHBOURHOOD: Neighbourhood where the reported crime activity occurred
+  - 9.X: Coordinate values projected in UTM Zome 10
+  - 10.Y: Coordinate values projected in UTM Zome 10
+  - 11.Latitude: Coordinate values converted to Latitude
+  - 12.Longitude: Coordinate values converted to Longitude
+
+# Graphical Profile of the Data
+```{r}
+crime %>%
+  inspect_types() %>%
+  show_plot()
+
+crime %>%
+  inspect_cat() %>%
+  show_plot()
+
+crime %>%
+  inspect_num %>%
+  show_plot()
+
+crime %>%
+  inspect_cor() %>%
+  show_plot()
+
+#crime %>%
+#  plot_intro()
+
+#crime %>% plot_bar()
+#crime %>% plot_histogram()
+#crime %>% plot_correlation(maxcat = 5L)
+```
+
+# Base EDA Step 1: Uni-variate non-Graphical EDA
+```{r}
+head(crime, 10)
+```
++ Data looks tidy, ready to start analysis
+
+    - data in each column is of same variable type
+```{r}
+# Examine the structure of the data
+str(crime)
+```
+
++ 530652 records of 12 variables
++ TYPE, HUNDRED_BLOCK, NEIGHBOURHOOD - Factor variables (Categorical)
++ YEAR, MONTH, DAY, HOUR, MINUTE - Continuous variables (Quantitative)
++ x, y, Latitude, Longitude - Continuous Numerical variables (Quantitative)
+
+
+```{r}
+# Examine the descriptive statistics
+crime %>%  summary()
+
+```
++ Data observations
+    
+    - YEAR, MINUTE appears to be right-skewed so not symmetric
+    - HOUR seems to be left-skewed so not symmetric
+       - this means I will use median instead 
+    - The most frequent type of crime is "Theft from vehicle"
+    - "OFFSET TO PROTECT PRIVACY" tops in the list, which will be treated as unknown in my analysis. Among the known locations of reported crime activity, "7xx GRANVILLE ST" takes the first place in the list
+    - "Central Business District" has the highest crime incidents
+    - 54362 records are missing for location and time information
+    
++ Potential research questions / issues
+ 
+    - When does crime occurs most frequently? (Year and time)
+    - What areas are the most unsafe? Are the unsafe areas are continuous or segmented?
+    - Are there certain neighbourhoods have high rate of particular type of crimes? If so,
+    is there any underlying causes?
+    - Any difference in the crime rate between different seasons or holiday/non-holiday seasons?
+    
+# Base EDA Step 2: Uni-variate graphical EDA
+
+Make a graph and examine for each variable individually
+
+```{r}
+# YEAR
+ggplot(crime, aes(x = YEAR)) + geom_line(stat="count") + theme_classic() + labs(title = "Crime Incidents by Year", x = "Year", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+**Comments** 
+
+    - Number of crimes decreases until 2011
+    - Starts and continues to increase from 2014 (2017 has only records up to July 13th)
+```{r}
+# MONTH
+ggplot(crime, aes(x = MONTH)) + geom_line(stat="count") + theme_classic() + labs(title = "Crime Incidents by Month", x = "Month", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+**Comments**
+    
+    - Number of crimes relatively evenly distributed across months
+    - February has slightly lower crime incidents
+    - Slight decline from Oct to Dec
+    
+```{r}
+# DAY
+ggplot(crime, aes(x = DAY)) + geom_line(stat="count") + theme_classic() + labs(title = "Crime Incidents by Day", x = "Day", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+**Comments**
+    
+    - Crime rate is well distributed across days
+    - 1st and 15th day of month have higher crime incidents 
+    - The rate slightly decreases toward end of month 
+    - Rate for 31st day is about a half of other days because there are only seven months with 31days in a year.
+    
+```{r}
+# HOUR
+# 54362 records are N/A for hour
+ggplot(crime, aes(x = HOUR)) + geom_line(stat="count") + theme_classic() + labs(title = "Crime Incidents by Hour", x = "Hour", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+
+**Comments** 
+    
+    - Four significant peaks at 0, 12, and 18 hour 
+    - Substantial decline from 0 to 1 hour and continual decrease between 1 - 5 hour
+    - Rate growth until 18 hour (max peak)
+    
+**Questions**
+
+    - Unlike common perception about time of crime frequency, day time has high crime incident rate. In contrast, crime rate from early morning aka after midnight until 6am is the lowest throughout day. What are potential causes for this? 
+    - are benign and severe crimes share the same hour trend?
+```{r}
+# MINUTE
+# 54362 records are N/A for minute (same as hour)
+ggplot(crime, aes(x = MINUTE)) + geom_line(stat="count") + theme_classic() + labs(title = "Crime Incidents by Minute", x = "MINUTE", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+**Comments**
+
+    - while it is well-distributed, 0 and 30 min have remarkably high crime rates 
+    - there are still relatively higher crime rates at 1st/3rd quaters
+    
+* 7 Categorical Variables - TYPE, NEIGHBOURHOOD, X, Y, HUNDRED_BLOCK, Latitude, Longitude
+```{r}
+# TYPE - flipped
+crime %>%
+ggplot( aes(x = TYPE)) + geom_bar() + theme_classic() + labs(title = "Crime Incidents by Type", x = "Type of Crime", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue")) + coord_flip()
+```
+**Comments**
+
+    - The most frequent type of crime is "Theft from Vehicle"
+    - Very little number of incidents of "Vehicle Collision or Pedestrian Struck(with Fatality)" and "Homicide" 
+
+**Questions**
+
+    - Split into groups of benign and severe crime? Would it give a different look into the data?
+```{r}
+# NEIGHBOURHOOD -flipped
+ggplot(crime, aes(x = NEIGHBOURHOOD)) + geom_bar() + theme_classic() + labs(title = "Crime Incidents by Neighbourhood", x = "Neighbourhood", y = "Number of Crimes" ) + theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue")) + coord_flip()
+```
+**Comments**
+
+    - 3 neighbourhoods (Central Business District, Arbutus Ridge, West End) have notably higher number of crimes
+    - Musqueam has very low number of crimes
+    - Crime rate is spread over among other neighbourhoods within certain range
+    
+* X/Y, HUNDRED_BLOCK and Latitude/Longitude are not suitable to plot graphs for analysis (Too many different values for x). Therefore, I am presenting non-graphical analysis with count and summary statistics 
+
+```{r}
+crime_x <- crime[, "X"]
+crime_y <- crime[, "Y"]
+crime_h <- crime[, "HUNDRED_BLOCK"]
+crime_Lt <- crime[, "Latitude"]
+crime_Lg <- crime[, "Longitude"]
+
+count(crime, X) %>% arrange(desc(n))
+count(crime, Y) %>% arrange(desc(n))
+count(crime, HUNDRED_BLOCK) %>% arrange(desc(n)) 
+count(crime, Latitude) %>% arrange(desc(n))
+count(crime, Longitude) %>% arrange(desc(n))
+
+summary(crime_x) 
+summary(crime_y)
+summary(crime_h)
+summary(crime_Lt) 
+summary(crime_Lg) 
+```
+**Comments**
+
+    - 54362 incidents are missing in all location information
+    - X/Y and Latitude/Logitude share the same list for number of crimes
+
+# Base EDA Step 3: Multi-variate non-graphical EDA
+## Quantitative / Numerical Variables
+
+**Do all crime types share the same trend through time?**
+```{r}
+# Comparing different type of crimes by YEAR
+crime %>% 
+  tabyl(YEAR, TYPE) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable()
+
+# Comparing different type of crimes by MONTH
+crime %>% 
+  tabyl(MONTH, TYPE) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable()
+
+# Comparing different type of crimes by DAY
+crime %>% 
+  tabyl(DAY, TYPE) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable()
+
+# Comparing different type of crimes by HOUR
+crime %>% 
+  tabyl(HOUR, TYPE) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable()
+
+# Comparing different type of crimes by MINUTE
+crime %>% 
+  tabyl(MINUTE, TYPE) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable()
+```
+**Comments**
+    
+    - TYPE by Year
+        - All crime types share steady decline until 2010 and remain low rate during the period between 2010 - 2013, and increase again after 2014 
+        
+    - TYPE by Month
+        - Slightly higher number of incidents across all crime types in summer
+        - Crime rate drops in all crime types in December and substantial increase in January (Holiday season effect?)
+        
+    - TYPE by DAY
+        - Last day of month have relatively low number of incidents than first day of month in all types of crimes
+    
+    - TYPE by HOUR    
+        - Break and Enter Commercial has high number of incidents during late night and early morning
+        - Almost all types of crime incidents increases around 18 hour
+        - N/A for Homicide and Offence Against a Person
+        
+    - TYPE by MINUTE
+        - high number of crimes at all quarters whilte 0 and 30 miniute have significant peaks. It tells that large portion of crimes are planned/organized
+## Categorical / Factor Variables
+
+```{r}
+# Comparing different type of crimes by NEIGHBOURHOOD
+crime %>% 
+  tabyl(NEIGHBOURHOOD, TYPE) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable()
+```
+**Comments**
+
+    - Central Business Disctrict wins the top in all types of crimes except Homicide(N/A), Offence Against a Person(N/A), Break and Enter Residential/Other
+    - Grandview-Woodland has the highest number in Break and Enter Residential/Other	
+
+# Base EDA Step 3: Multi-variate non-graphical EDA 
+## Crime rates by type over time
+```{r}
+### TYPE ###
+
+# Number by Crime Type by Year
+ggplot(crime, aes(x = YEAR, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Number by Crime Types by Year", x = "Year", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+# Number by Crime Types by Month
+ggplot(crime, aes(x = MONTH, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Month", x = "Month", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "red"))
+
+
+# Number by Crime Types by Day
+ggplot(crime, aes(x = DAY, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Day", x = "Day", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "red"))
+
+
+# Number by Crime Types by Hour
+ggplot(crime, aes(x = HOUR, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Hour", x = "Hour", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Number by Crime Types by Minute
+ggplot(crime, aes(x = MINUTE, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Minute", x = "Minute", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "red "))
+```
+- TYPE by YEAR
+    - Other Theft continues to increase
+    - Mischief streadily decreases with a bit of up and down through years
+    - Theft of Vehicle/Break and Enter Residential/Other sizably drops through years
+    - While Theft from Vehicle takes majority of crime incidents, number of cases sharply declines from 2004 to 2011, then it starts to bounce up until recently years.
+    
+- TYPE by MONTH
+    - Rate of Theft of Bicycle rises and peak during summer/ drops and stays low during winter
+    
+- TYPE by DAY
+    - Except Other Theft, number of all crime types are high on first day of month
+    - While most of crime rates slowly declines toward end of month, there is a sudden crest on day 15
+    
+- TYPE by HOUR
+    - Majority follows the trend of low rate during early morning(1-5 hour), increase day time until 18 hour, and remain high during night(18-24 hour)
+    - Other Theft stays low during early morning and peaks the top at 15 hour
+    - Break and Enter Commercial/Other happens more during early morning and time around 18 hour
+
+- TYPE by MINUTE
+    - Most crime incidents happens at quaters while the majority of them happens at 0 and 30 minute
+
+* Graphs are too crowded as there are too many types of crimes. I will try to group them into 3-4 based on their patterns over time.
+
+### Year
+
+    - Group by patterns over years
+
+* Group 1(increase-decrease-increase): 'Break and Enter Commercial', 'Theft from Vehicle', 'Vehicle Collision or Pedestrian Struck (with Injury)'
+
+* Group 2(constantly decrease): 'Break and Enter Residential/Other', 'Mischief', 'Theft of Vehicle', 'Offence Against a Person'
+
+* Group 3(constantly increase): 'Other Theft', 'Theft of Bicycle'
+
+* Group 4 (number of cases too small to get a conclusive pattern): 'Homicide', 'Vehicle Collision or Pedestrian Struck (with Fatality)'
+
+
+```{r}
+ggplot(crime, aes(x = YEAR, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Number by Crime Types by Year", x = "Year", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+#-------------------------------------#
+comm <- crime %>% filter(TYPE %in% 'Break and Enter Commercial')
+resit <- crime %>% filter(TYPE %in% 'Break and Enter Residential/Other')
+homi <- crime %>% filter(TYPE %in% 'Homicide')
+mis <- crime %>% filter(TYPE %in% 'Mischief')
+off <- crime %>% filter(TYPE %in% 'Offence Against a Person')
+ot <- crime %>% filter(TYPE %in% 'Other Theft')
+tfv <- crime %>% filter(TYPE %in% 'Theft from Vehicle')
+tb <- crime %>% filter(TYPE %in% 'Theft of Bicycle')
+tv <- crime %>% filter(TYPE %in% 'Theft of Vehicle')
+vcf <- crime %>% filter(TYPE %in% 'Vehicle Collision or Pedestrian Struck (with Fatality)')
+vci <- crime %>% filter(TYPE %in% 'Vehicle Collision or Pedestrian Struck (with Injury)')
+
+grid.arrange(
+  ggplot(comm, aes(x = YEAR)) + geom_line(stat = 'count', color = 'blue') + geom_point(stat = 'count', color = 'blue') + theme_classic() + labs(title = "Break and Enter Commercial" , x= ' ' , y = ' '), 
+ 
+  ggplot(resit, aes(x = YEAR)) + geom_line(stat = 'count', color = 'red') + geom_point(stat = 'count', color = 'red') + theme_classic() + labs(title = "Break and Enter Residential/Other", x= ' ' , y = ' ' ), 
+  
+  ggplot(homi, aes(x = YEAR)) + geom_line(stat = 'count', color = ' green') + geom_point(stat = 'count', color = 'green') +  theme_classic() + labs(title = "Homicide", x= ' ' , y = ' ' ),
+  
+  ggplot(mis, aes(x = YEAR)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = "Mischief", x= ' ' , y = ' ' ),
+  
+  ggplot(off, aes(x = YEAR)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = "Offence Against a Person", x= ' ' , y = ' ' ),
+  
+  ggplot(ot, aes(x = YEAR)) + geom_line(stat = 'count', color = 'pink') + geom_point(stat = 'count', color = 'pink') +  theme_classic() + labs(title = "Other Theft", x= ' ' , y = ' ' ),
+  
+  ggplot(tfv, aes(x = YEAR)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = 'Theft from Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(tb, aes(x = YEAR)) + geom_line(stat = 'count', color = 'orange') + geom_point(stat = 'count', color = 'orange') +  theme_classic() + labs(title = 'Theft of Bicycle', x= ' ' , y = ' ' ),
+  
+  ggplot(tv, aes(x = YEAR)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Theft of Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(vcf, aes(x = YEAR)) + geom_line(stat = 'count', color = 'light blue') + geom_point(stat = 'count', color = 'light blue') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Fatality)', x= ' ' , y = ' ' ),
+  
+  ggplot(vci, aes(x = YEAR)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Injury)', x= ' ' , y = ' ' )
+)
+```
+
+### Month
+
+    - Group by patterns over months
+
+* Group 1 ( random pattern = up&down all year round): 'Break and Enter Commercial',  'Vehicle Collision or Pedestrian Struck (with Injury)', 'Break and Enter Residential/Other'
+
+* Group 2 ( increase toward summer & decrease toward winter):  'Offence Against a Person', 'Theft from Vehicle', 'Theft of Bicycle', 'Theft of Vehicle',
+
+* Group 3 (decrease toward end of year): "Other Theft", 'Mischief'  
+
+* Group 4 (too small sample size, random pattern) : 'Homicide', 'Vehicle Collision or Pedestrian Struck (with Fatality)'
+
+* Most types of crime decline december
+
+```{r}
+ggplot(crime, aes(x = MONTH, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Number by Crime Types by Month", x = "Year", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+#-------------------------------------#
+
+grid.arrange(
+  ggplot(comm, aes(x = MONTH)) + geom_line(stat = 'count', color = 'blue') + geom_point(stat = 'count', color = 'blue') + theme_classic() + labs(title = "Break and Enter Commercial" , x= ' ' , y = ' '), 
+ 
+  ggplot(resit, aes(x = MONTH)) + geom_line(stat = 'count', color = 'red') + geom_point(stat = 'count', color = 'red') + theme_classic() + labs(title = "Break and Enter Residential/Other", x= ' ' , y = ' ' ), 
+  
+  ggplot(homi, aes(x = MONTH)) + geom_line(stat = 'count', color = ' green') + geom_point(stat = 'count', color = 'green') +  theme_classic() + labs(title = "Homicide", x= ' ' , y = ' ' ),
+  
+  ggplot(mis, aes(x = MONTH)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = "Mischief", x= ' ' , y = ' ' ),
+  
+  ggplot(off, aes(x = MONTH)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = "Offence Against a Person", x= ' ' , y = ' ' ),
+  
+  ggplot(ot, aes(x = MONTH)) + geom_line(stat = 'count', color = 'pink') + geom_point(stat = 'count', color = 'pink') +  theme_classic() + labs(title = "Other Theft", x= ' ' , y = ' ' ),
+  
+  ggplot(tfv, aes(x = MONTH)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = 'Theft from Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(tb, aes(x = MONTH)) + geom_line(stat = 'count', color = 'orange') + geom_point(stat = 'count', color = 'orange') +  theme_classic() + labs(title = 'Theft of Bicycle', x= ' ' , y = ' ' ),
+  
+  ggplot(tv, aes(x = MONTH)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Theft of Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(vcf, aes(x = MONTH)) + geom_line(stat = 'count', color = 'light blue') + geom_point(stat = 'count', color = 'light blue') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Fatality)', x= ' ' , y = ' ' ),
+  
+  ggplot(vci, aes(x = MONTH)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Injury)', x= ' ' , y = ' ' )
+)
+```
+
+### Days
+
+    - Group by patterns over days
+    
+* Group 1 ( high on 1st & 15th - sign of organized crime): 'Break and Enter Commercial', 'Mischief', 'Theft of Bicycle'
+
+* Group 2 ( Gradually decrease toward end of month): 'Break and Enter Residential/Other', 'Other Theft', 'Theft from Vehicle', 'Theft of Vehicle'
+
+* Group 3 ( flat with minor up&down ): 'Offence Against a Person', 'Vehicle Collision or Pedestrian Struck (with Injury)'
+
+* Group 4 ( too small number, no pattern): 'Homicide', 'Vehicle Collision or Pedestrian Struck (with Fatality)'
+
+```{r}
+# Number by Crime Types by Day
+ggplot(crime, aes(x = DAY, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Day", x = "Day", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "red"))
+
+grid.arrange(
+  ggplot(comm, aes(x = DAY)) + geom_line(stat = 'count', color = 'blue') + geom_point(stat = 'count', color = 'blue') + theme_classic() + labs(title = "Break and Enter Commercial" , x= ' ' , y = ' '), 
+ 
+  ggplot(resit, aes(x = DAY)) + geom_line(stat = 'count', color = 'red') + geom_point(stat = 'count', color = 'red') + theme_classic() + labs(title = "Break and Enter Residential/Other", x= ' ' , y = ' ' ), 
+  
+  ggplot(homi, aes(x = DAY)) + geom_line(stat = 'count', color = ' green') + geom_point(stat = 'count', color = 'green') +  theme_classic() + labs(title = "Homicide", x= ' ' , y = ' ' ),
+  
+  ggplot(mis, aes(x = DAY)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = "Mischief", x= ' ' , y = ' ' ),
+  
+  ggplot(off, aes(x = DAY)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = "Offence Against a Person", x= ' ' , y = ' ' ),
+  
+  ggplot(ot, aes(x = DAY)) + geom_line(stat = 'count', color = 'pink') + geom_point(stat = 'count', color = 'pink') +  theme_classic() + labs(title = "Other Theft", x= ' ' , y = ' ' ),
+  
+  ggplot(tfv, aes(x = DAY)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = 'Theft from Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(tb, aes(x = DAY)) + geom_line(stat = 'count', color = 'orange') + geom_point(stat = 'count', color = 'orange') +  theme_classic() + labs(title = 'Theft of Bicycle', x= ' ' , y = ' ' ),
+  
+  ggplot(tv, aes(x = DAY)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Theft of Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(vcf, aes(x = DAY)) + geom_line(stat = 'count', color = 'light blue') + geom_point(stat = 'count', color = 'light blue') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Fatality)', x= ' ' , y = ' ' ),
+  
+  ggplot(vci, aes(x = DAY)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Injury)', x= ' ' , y = ' ' )
+)
+```
+
+### Hours
+
+    - Group by patterns over hours
+    
+* Group 1 (High early morning & evening): 'Break and Enter Commercial'
+
+* Group 2 ( Low early morning, increase toward 18 hour & high until 24 hour):
+'Break and Enter Residential/Other', 'Mischief', 'Theft from Vehicle', 'Theft of Bicycle', 'Theft of Vehicle'
+
+* Group 3 ( Peak at 18 hour): 'Other Theft', 'Vehicle Collision or Pedestrian Struck (with Injury)'
+
+* Group 4 (info N/A & too small number - no pattern): 'Homicide', 'Vehicle Collision or Pedestrian Struck (with Fatality)', 'Offence Against a Person' 
+
+```{r}
+# Number by Crime Types by Hour
+ggplot(crime, aes(x = HOUR, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Hour", x = "Hour", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+grid.arrange(
+  ggplot(comm, aes(x = HOUR)) + geom_line(stat = 'count', color = 'blue') + geom_point(stat = 'count', color = 'blue') + theme_classic() + labs(title = "Break and Enter Commercial" , x= ' ' , y = ' '), 
+ 
+  ggplot(resit, aes(x = HOUR)) + geom_line(stat = 'count', color = 'red') + geom_point(stat = 'count', color = 'red') + theme_classic() + labs(title = "Break and Enter Residential/Other", x= ' ' , y = ' ' ), 
+  
+  ggplot(homi, aes(x = HOUR)) + geom_line(stat = 'count', color = ' green') + geom_point(stat = 'count', color = 'green') +  theme_classic() + labs(title = "Homicide", x= ' ' , y = ' ' ),
+  
+  ggplot(mis, aes(x = HOUR)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = "Mischief", x= ' ' , y = ' ' ),
+  
+  ggplot(off, aes(x = HOUR)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = "Offence Against a Person", x= ' ' , y = ' ' ),
+  
+  ggplot(ot, aes(x = HOUR)) + geom_line(stat = 'count', color = 'pink') + geom_point(stat = 'count', color = 'pink') +  theme_classic() + labs(title = "Other Theft", x= ' ' , y = ' ' ),
+  
+  ggplot(tfv, aes(x = HOUR)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = 'Theft from Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(tb, aes(x = HOUR)) + geom_line(stat = 'count', color = 'orange') + geom_point(stat = 'count', color = 'orange') +  theme_classic() + labs(title = 'Theft of Bicycle', x= ' ' , y = ' ' ),
+  
+  ggplot(tv, aes(x = HOUR)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Theft of Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(vcf, aes(x = HOUR)) + geom_line(stat = 'count', color = 'light blue') + geom_point(stat = 'count', color = 'light blue') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Fatality)', x= ' ' , y = ' ' ),
+  
+  ggplot(vci, aes(x = HOUR)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Injury)', x= ' ' , y = ' ' )
+)
+```
+
+### Minutes
+
+    - Group by patterns over hours
+
+* Group 1(Most cases occured at 0 & 30 minute - organized crime): 'Break and Enter Commercial', 'Break and Enter Residential/Other', 'Mischief', 'Theft from Vehicle', 'Theft of Bicycle', 'Theft of Vehicle'
+
+* Group 2( Up&down with peaks at 0 and 30 min - mix of disorganized/organized crime): 'Other Theft', 'Vehicle Collision or Pedestrian Struck (with Injury)'
+
+* Group 3(No info or too small number of incidents): 'Homicide', 'Vehicle Collision or Pedestrian Struck (with Fatality)' , 'Offence Against a Person'
+
+* Other Theft and Vehicle Collision or Pedestrian Struck(with Injury) - mix of organized and disorganized
+
+* Vehicle Collision or Pedestrian Struck(with Fatality) - randomly distributed, it means most cases are not planned - disorganized
+
+* All others - share a specific pattern of having four quarters with majority occurred at 0 and 30 minute - organized
+
+```{r}
+# Number by Crime Types by Minute
+ggplot(crime, aes(x = MINUTE, color = TYPE)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Minute", x = "Minute", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "red "))
+
+grid.arrange(
+  ggplot(comm, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'blue') + geom_point(stat = 'count', color = 'blue') + theme_classic() + labs(title = "Break and Enter Commercial" , x= ' ' , y = ' '), 
+ 
+  ggplot(resit, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'red') + geom_point(stat = 'count', color = 'red') + theme_classic() + labs(title = "Break and Enter Residential/Other", x= ' ' , y = ' ' ), 
+  
+  ggplot(homi, aes(x = MINUTE)) + geom_line(stat = 'count', color = ' green') + geom_point(stat = 'count', color = 'green') +  theme_classic() + labs(title = "Homicide", x= ' ' , y = ' ' ),
+  
+  ggplot(mis, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = "Mischief", x= ' ' , y = ' ' ),
+  
+  ggplot(off, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = "Offence Against a Person", x= ' ' , y = ' ' ),
+  
+  ggplot(ot, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'pink') + geom_point(stat = 'count', color = 'pink') +  theme_classic() + labs(title = "Other Theft", x= ' ' , y = ' ' ),
+  
+  ggplot(tfv, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'dark green') + geom_point(stat = 'count', color = 'dark green') +  theme_classic() + labs(title = 'Theft from Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(tb, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'orange') + geom_point(stat = 'count', color = 'orange') +  theme_classic() + labs(title = 'Theft of Bicycle', x= ' ' , y = ' ' ),
+  
+  ggplot(tv, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Theft of Vehicle', x= ' ' , y = ' ' ),
+  
+  ggplot(vcf, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'light blue') + geom_point(stat = 'count', color = 'light blue') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Fatality)', x= ' ' , y = ' ' ),
+  
+  ggplot(vci, aes(x = MINUTE)) + geom_line(stat = 'count', color = 'purple') + geom_point(stat = 'count', color = 'purple') +  theme_classic() + labs(title = 'Vehicle Collision or Pedestrian Struck(with Injury)', x= ' ' , y = ' ' )
+)
+```
+
+* It is difficult to group by type of crimes based on patterns over time. Instead, I group them into four as Break_Enter, Theft, Vehicle_crime, and Other
+
+### Regroup and create new type of crime variable for detailed EDA
+
+```{r}
+# Create new type variable
+
+
+#crime$CLASS <- ifelse(crime$TYPE == c('Break and Enter Commercial', 'Mischief', 'Theft from Vehicle'), 'Class1', ifelse(crime$TYPE == c('Theft of Bicycle','Theft of Vehicle', 'Other Theft', 'Vehicle Collision or Pedestrian Struck (with Injury)', 'Offence Against a Person', 'Break and Enter Residential/Other'), 'Class2', 'Class3'))
+
+
+crime$CLASS <- ifelse(crime$TYPE %in% c('Break and Enter Commercial','Break and Enter Residential/Other'), 'B&E', ifelse(crime$TYPE %in% c('Theft from Vehicle', 'Theft of Bicycle', 'Theft of Vehicle', 'Other Theft'), 'Theft', ifelse(crime$TYPE %in% c('Vehicle Collision or Pedestrian Struck (with Injury)','Vehicle Collision or Pedestrian Struck (with Fatality)'), 'Vehicle Crime', 'Other')))
+```
+
+```{r}
+
+#YEAR
+crime %>%
+  ggplot(aes(x = YEAR, color = CLASS)) + geom_line(stat = 'count') + theme_classic() + labs(title = "Numbers by Crime Class by Year", x = "Year", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+#MONTH
+crime  %>%
+  ggplot(aes(x = MONTH, color = CLASS)) + geom_line(stat = 'count') + theme_classic() + labs(title = "Numbers by Crime Class by Month", x = "Month", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+#DAY
+crime  %>%
+  ggplot(aes(x = DAY, color = CLASS)) + geom_line(stat = 'count') + theme_classic() + labs(title = "Numbers by Crime Class by Day", x = "Day", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+#HOUR (N/A for 'Offence Against a Person' and 'Homicide)
+crime  %>%
+  ggplot(aes(x = HOUR, color = CLASS)) + geom_line(stat = 'count') + theme_classic() + labs(title = "Numbers by Crime Class by Hour", x = "Hour", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+#MINUTE (N/A for 'Offence Against a Person' and 'Homicide)
+crime  %>%
+  ggplot(aes(x = MINUTE, color = CLASS)) + geom_line(stat = 'count') + theme_classic() + labs(title = "Numbers by Crime Class by Minute", x = "Minute", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+```
+* Year
+    - Theft crime rate decreases until 2011,  then it sharply increases again
+    - types of Break and Enter crimes gradually decreases over the years
+    - Vehicle collision crimes, although it is slow and gradual, decreases
+    - The rate of other crimes does not change
+
+* Month
+    - Theft types of crimes increae during summer and decline winter. It seems it is affecting the trend of total crime rate over years as it is the most frequent types of crimes
+    - The rest of types of crime stay still with small ups and downs
+    
+* Day
+    - Other than Vehicle associated crimes, the rest shares the trend of high crime rate on 1st & 15th day of month.
+    - Theft crimes decreases toward end of month
+    - Note that homicide rate does not share the same pattern with other types of crimes and it is unpredictable
+    
+* Hour
+    - The grouping model of class does not represent the trend by type of crimes in hour level
+    - Rate of theft drops significantly after 24 hour and increaes after 5 am until 18 hour and stays high until 24 hour
+    - whilte break and enter types of crimes peak at 18hour, the graph of break and enter commercial rate is high during early morning (0 - 5 hour) and stays at low level until 15 hour
+    - Vehicle associated crimes increaes during late afternoon
+    - Other types of crimes share the same pattern with Theft
+    
+* Minute
+    - Other than Vehicle collision crime types, all have high number of crimes at 0 and 30 minute
+  
+## Crime rates by Neighbourhood over time
+
+```{r}
+### NEIGHBOURHOOD ###
+
+# Crime incidents by Neighbourhood by Year
+ggplot(crime, aes(x = YEAR, color = NEIGHBOURHOOD)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Year", x = "Year", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Neighbourhood by Month
+ggplot(crime, aes(x = MONTH, color = NEIGHBOURHOOD)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Month", x = "Month", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Neighbourhood by Day
+ggplot(crime, aes(x = DAY, color = NEIGHBOURHOOD)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Day", x = "Day", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Neighbourhood by Hour
+ggplot(crime, aes(x = HOUR, color = NEIGHBOURHOOD)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Hour", x = "Hour", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Neighbourhood by Minute
+ggplot(crime, aes(x = MINUTE, color = NEIGHBOURHOOD)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Numbers by Crime Types by Minute", x = "Minute", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+- Split neighbourhoods into two groups
+
+* Group 1(Top 10 neighbourhood with highest crime rate): Central Business District, West End, Fairview, Mount Pleasant, Grandview-Woodland, Renfrew-Collingwood, 	Kitsilano, Kensington-Cedar Cottage, Strathcona, Hastings-Sunrise, Sunset
+
+* Group 2(Others): Marpole, Riley Park, Victoria-Fraserview, Killarney, Oakridge, Dunbar-Southlands, Kerrisdale, Arbutus Ridge, West Point Grey, Shaughnessy, South Cambie, Stanley Park, Musqueam
+
+```{r}
+# Create new neighbourhood variable
+#crime <- mutate(crime, COMMUNITY = as.factor(
+    #ifelse(NEIGHBOURHOOD == c('Central Business District', 'West End', 'Fairview', 'Mount Pleasant', 'Grandview-Woodland', 'Renfrew-Collingwood', 	'Kitsilano', 'Kensington-Cedar Cottage', 'Strathcona', 'Hastings-Sunrise', 'Sunset'), "Unsafe_comm", 'safe_comm' )))
+           #ifelse(NEIGHBOURHOOD == c('Marpole', 'Riley Park', 'Victoria-Fraserview', 'Killarney', 'Oakridge', 'Dunbar-Southlands', 'Kerrisdale', 'Arbutus Ridge', 'West Point Grey', 'Shaughnessy', 'South Cambie', 'Stanley Park', 'Musqueam'), 'safe_comm', "N/A"))))
+
+```
+* TOP 11 neighbourhood with most crimes
+
+### Group as two for neighbourhoods (Safe Community, Unsafe Community)
+```{r}
+z <- count(crime, NEIGHBOURHOOD) %>% arrange(desc(n))
+view(z)
+```
+
+- Split neighbourhoods into two groups
+
+* 56624 cases missing location information and they are labeled as "OFFSET TO PROTECT PRIVACY"
+
+* Group 1(Top 8, number of crimes > 24000 - a large drop in crime numbers by 4000 between Kensington and Strathcona): neighbourhood with highest crime rate): Central Business District, West End, Fairview, Mount Pleasant, Grandview-Woodland, Renfrew-Collingwood, 	Kitsilano, Kensington-Cedar Cottage
+
+* Group 2(Others): Strathcona, Hastings-Sunrise, Sunset, Marpole, Riley Park, Victoria-Fraserview, Killarney, Oakridge, Dunbar-Southlands, Kerrisdale, Arbutus Ridge, West Point Grey, Shaughnessy, South Cambie, Stanley Park, Musqueam
+
+```{r}
+# Create new neighbourhood variable
+#crime <- mutate(crime, COMMUNITY = as.factor(
+ #   ifelse(NEIGHBOURHOOD %in% c('Central Business District', 'West End', 'Fairview', 'Mount Pleasant', 'Grandview-Woodland', 'Renfrew-Collingwood', 	'Kitsilano', 'Kensington-Cedar Cottage', 'Strathcona', 'Hastings-Sunrise', 'Sunset'), "Unsafe_comm", 'safe_comm',  ifelse(NEIGHBOURHOOD %in% c('Marpole', 'Riley Park', 'Victoria-Fraserview', 'Killarney', 'Oakridge', 'Dunbar-Southlands', 'Kerrisdale', 'Arbutus Ridge', 'West Point Grey', 'Shaughnessy', 'South Cambie', 'Stanley Park', 'Musqueam'), 'safe_comm', "N/A"))))
+           
+
+#crime$COMM <- ifelse(crime$NEIGHBOURHOOD %in% c('Central Business District', 'West End', 'Fairview', 'Mount Pleasant', 'Grandview-Woodland', 'Renfrew-Collingwood', 	'Kitsilano', 'Kensington-Cedar Cottage', 'Strathcona', 'Hastings-Sunrise', 'Sunset'), "Unsafe_comm", ifelse(NEIGHBOURHOOD %in% c('Marpole', 'Riley Park', 'Victoria-Fraserview', 'Killarney', 'Oakridge', 'Dunbar-Southlands', 'Kerrisdale', 'Arbutus Ridge', 'West Point Grey', 'Shaughnessy', 'South Cambie', 'Stanley Park', 'Musqueam'), 'safe_comm', "N/A"))
+
+crime$COMM <- ifelse(crime$NEIGHBOURHOOD %in% c('Central Business District', 'West End', 'Fairview', 'Mount Pleasant', 'Grandview-Woodland', 'Renfrew-Collingwood', 	'Kitsilano', 'Kensington-Cedar Cottage'), "Unsafe_comm", ifelse(crime$NEIGHBOURHOOD %in% '', 'N/A','Safe_comm'))
+
+#'Strathcona', 'Hastings-Sunrise', 'Sunset'
+```
+
+## Crime rate by Community over time
+```{r}
+# Crime incidents by Community by Year
+ggplot(crime, aes(x = YEAR, color = COMM)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Crime rates by Community by Year", x = "Year", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Community by Month
+ggplot(crime, aes(x = MONTH, color = COMM)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Crime rates by Community by Month", x = "Month", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Community by Day
+ggplot(crime, aes(x = DAY, color = COMM)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Crime rates by Community by Day", x = "Day", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Community by Hour
+ggplot(crime, aes(x = HOUR, color = COMM)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Crime rates by Community by Hour", x = "Hour", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+# Crime incidents by Community by Minute
+ggplot(crime, aes(x = MINUTE, color = COMM)) + 
+  geom_line(stat = 'count') + 
+  #geom_point(stat = 'count') + 
+  theme_classic() + labs(title = "Crime rates by Community by Minute", x = "Minute", y = "Number of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+```
+
+* CLASS and COMM show similar pattern over time. Does it mean the most frequent type of crimes occur in unsafe neighbourhood?
+
+# Detailed EDA
+
+## Percentage of Theft type crimes higher in unsafe communities?
+
+```{r}
+# Remove rows with N/A in COMM column
+# Create graphs for percentage of crimes by CLASS
+final1 <- crime %>% filter(COMM %in% c("Safe_comm", "Unsafe_comm")) %>% ggplot(aes(x= CLASS,  group=COMM)) + 
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y= ..prop.. ), stat= "count", vjust = 0) +
+    labs(y = "Percent", fill="CLASS", title = "Crime Rate by CLASS: Safe vs Unsafe Neighbourhoods") + theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) +
+    facet_grid(~COMM) +
+    scale_y_continuous(labels=percent) + scale_fill_manual(values = c("#D16103", "#C4961A", "#4E84C4", "#293352", "#C3D7A4"))
+final1
+ggsave("Theft_unsafe_comm5.png", plot = final1) 
+#"#FFDB6D", "#C4961A", "#F4EDCA", "#D16103", "#C3D7A4", "#52854C", "#4E84C4", "#293352"
+```
+
+* In Unsafe communities, Theft type of crimes are more common while Break and Enter crimes is 9% higher in total crime incidents in Safe communities
+
+### Suggestions:
+
+    - 1: Theft type of crime occurs more frequently in unsafe neighbourhoods. Since Theft crimes are more likely to happen impulsively without plan ahead, improving general public security needs to be priortized in those communities by such as increasing number of patrols
+    - 2: Break and Enter crimes are relatively common in safe neighbourhoods. As such type of crimes are generally organized and planned ahead, enhancing survelliance system for places vulnerable to the type of crimes will help to lower the crime rate among the safe neighbourhoods
+    
+## Is Vancouver getting safer? If so, what is the leading cause?
+
+```{r}
+
+#group_by(Company, flavor) %>% summarise(medPrice = median(price, na.rm=FALSE)) %>% 
+ # ggplot(aes(x = flavor, y=medPrice, fill = Company)) + geom_histogram(position = "dodge", stat = "identity")
+
+#crime %>% group_by(MONTH) %>% summarize(mean_MONTH = mean(MONTH, na.rm =FALSE)) %>% ggplot(x = YEAR, y = mean_MONTH) + =geom_line(stat = 'count')
+final2 <- grid.arrange(
+  crime %>% ggplot(aes(x = YEAR)) + geom_line(stat = 'count')+ ylim(0, 50000) + theme_classic() + labs(title = "Total Annual Crime Rate", y = "Number of Crimes" , x = "") + theme(plot.title = element_text(size=10, colour = "blue"),  axis.title = element_text(size = 10)),
+  
+  crime %>% filter(!CLASS %in% "Theft") %>% ggplot(aes(x = YEAR)) + geom_line(stat = 'count')+ ylim(0, 50000) + theme_classic() + labs(title = "Annual Crime Rate Without Theft", y = "Number of Crimes" , x = "") + theme(plot.title = element_text(size=10, colour = "red"),  axis.title = element_text(size = 10)),
+  
+
+crime %>% filter(CLASS %in% "Theft") %>% ggplot(aes(x = YEAR, color = CLASS, fill = CLASS)) + geom_line(stat = 'count') + ylim(0, 50000) +theme_classic() + theme(
+    legend.position = c(.99, .99),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(1, 1, 1, 1),
+    legend.title=element_text(size=5),
+    legend.text=element_text(size=5),
+    legend.key.size = unit(0.05, "cm")
+    ) + labs(title = "Theft Annual Crime Rate", y = "Number of Crimes" , x = "") + theme(plot.title = element_text(size=10, colour = "blue"),  axis.title = element_text(size = 10)),
+
+crime %>% filter(!CLASS %in% "Theft") %>% ggplot(aes(x = YEAR, color = CLASS, fill = CLASS)) + geom_line(stat = 'count') + ylim(0, 30000) +theme_classic() +  
+theme(
+    legend.position = c(.99, .99),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(1, 1, 1, 1),
+    legend.title=element_text(size=5),
+    legend.text=element_text(size=5),
+    legend.key.size = unit(0.05, "cm"),
+    plot.title = element_text(size=10, colour = "red"),
+    axis.title = element_text(size = 10)) +
+  labs(title = "Annual Crime Rate of Other Crime Classes", y = "Number of Crimes" , x = "") +
+  scale_color_manual(values = c("#D16103", "#293352", "#FFDB6D", "#293352", "#C3D7A4")),
+top = "Annual Crime Rate Changes Over Years: Theft vs. Others"
+)
+
+final2
+#ggsave("Theft_most_impactable5.png", plot = final2)
+# "#FFDB6D", "#C4961A", "#F4EDCA", "#D16103", "#C3D7A4", "#52854C", "#4E84C4", "#293352"
+```
+
+
+* As the graphs above shows, the annual crime number decreaes until 2011 and increases after 2013. Theft crimes share the same trend with the total annual crime trend over the years. On contrary, Break and Enter crimes gradually decreases over the years and rates of the other classes of crimes does not change much. This tells that reducing theft type of crimes is the priority while it indicates decline of organized crimes
+    
+# Statistical EDA
+## Hypothesis 1: Theft crimes more frequent in unsafe neighbourhoods
+
+    - Null Hypothesis: Rate of Theft crimes is the same in both unsafe and safe neighbourhoods
+    - Alternative Hypothesis: Rate of Theft crimes is higher in unsafe neighbourhoods
+### Graphical analysis for Hypothesis 1 
+```{r}
+# Create column Theft_Crime vs Non_Theft_Crime
+crime$Tft <- ifelse(crime$TYPE %in% c('Theft from Vehicle', 'Theft of Bicycle', 'Theft of Vehicle', 'Other Theft'), 'Theft_Crime', 'Non_Theft_Crime')
+
+crime$danger <- ifelse(crime$NEIGHBOURHOOD %in% c('Central Business District', 'West End', 'Fairview', 'Mount Pleasant', 'Grandview-Woodland', 'Renfrew-Collingwood', 	'Kitsilano', 'Kensington-Cedar Cottage'), 'Dangerous_comm', 'Undangerous_comm')
+
+crime_test <- crime %>% filter(!COMM %in% "N/A" ) 
+table(crime$Tft, crime$danger)
+
+ggplot(crime_test,aes(x = danger,fill = Tft)) + 
+    geom_bar(position = "fill") + theme_classic() + labs(title = "Proportion of Theft Crimes in Safe Community vs Unsafe Community", x = "", y = "Percentage" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue")) + scale_y_continuous(labels=percent)
+```
+### Proportion test
+
+    - The p-value of the proportion test is <0.0000000000000002, it rejects the null hypothesis. The test result informs that Theft crimes are more frequent in the neighbourhoods with high crime rates.
+```{r}
+
+prop.test(table(crime_test$Tft, crime_test$danger), correct= FALSE)
+```
+
+## Hypothesis 2: Crime rate of Vancouver is decreasing
+
+    - Null Hypotheiss: Rate of crime is not changing or increasing over years
+    - Alternative Hypothesis: Rate of crime is decreasing over years
+
+### Graphical analysis for Hypothesis 2
+* Drop YEAR 2017 as the data contains crime record only up to July for Year 2017
+```{r}
+df_sum <- crime %>% filter(!YEAR %in% '2017') %>%
+  group_by(YEAR) %>% tally()
+
+ggplot(df_sum,aes(x =YEAR, y = n)) + geom_line() + geom_smooth(method = 'lm', color = 'red') + theme_classic() + labs(title = "Number of Crimes vs Year", subtitle = "Number of crime incidents goes down as year goes by", x = "Year", y = "Numer of Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+
+```
+
+### t-test
+
+    - The t-test rejects the null hypotheis with the p-value of 4.891e-10 (fairly close to 0). This indicates that the rate of crime in Vancouver is decreasing over years. However, would it be true in all types of crimes? Let's see the Hypothesis 3.
+```{r}
+t.test(df_sum$YEAR, df_sum$n, conf.level = 0.95)
+```
+
+## Hypothesis 3: Theft crime is the most significant factor on annual crime rate behaviour
+
+    - Null Hypothesis: The total crime rate change over years is not same as Theft crime rate changes
+    - Alternative Hypothesis: The total crime rate change over years is same as Theft crime rate changes
+    
+### Graphical analysis for Hypothesis 3 - Regression of Theft Class rate over years
+
+```{r}
+
+df_sum_Theft <- crime %>% filter(CLASS %in% 'Theft') %>% filter(!YEAR %in% '2017') %>%
+  group_by(YEAR) %>% tally()
+
+df_sum_not_Theft <- crime %>% filter(!CLASS %in% 'Theft') %>% filter(!YEAR %in% '2017') %>%
+  group_by(YEAR) %>% tally()
+
+
+ggplot(df_sum_Theft, aes(x = YEAR, y = n)) + geom_smooth(method = 'lm') + ylim(10000, 30000) + theme_classic() + labs(title = "Number of Theft Crimes vs Year", subtitle = "Number of Theft crime incidents declines significantly as year passes", x = "Year", y = "Number of Theft Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+ggplot(df_sum_not_Theft, aes(x = YEAR, y = n)) + geom_smooth(method = 'lm') + ylim(10000, 30000) + theme_classic() + labs(title = "Number of Theft Crimes vs Year", subtitle = "Number of Theft crime incidents goes down at moderate degree as year passes", x = "Year", y = "Number of Theft Crimes" ) + 
+  theme(axis.title = element_text(colour = "dark green"), title = element_text(colour = "blue"))
+
+```
+
+### t-test
+
+#### Conduct two hypothesis tests: 1. Rate change of Theft CLASS crime vs Total crime rate change over years & 2. Rate change of Non Theft CLASS crime vs Total crime rate change over years
+
+    - Although both tests reject the null hypothesis, the test on the Theft CLASS crime trend has much lower p-value with 5.537e-12. Hence, it is more statistically significant and it supports that the total crime rate of Vancouver behaves much similar to the rate of Theft CLASS crimes over years
+
+```{r}
+#Total_crime <- with(df_sum$YEAR, df_sum$n)
+#Theft_crime <- with(df_sum$YEAR, df_sum$n)
+
+t.test(df_sum$n, df_sum_Theft$n,paired = T, conf.level = 0.95)
+
+t.test(df_sum$n, df_sum_not_Theft$n,paired = T, conf.level = 0.95)
+```
+
+
+# Mapping Visual of Vancouver Crime 
+* Each section has 3 types of maps including heat map, and RgoogleMap
+
+## Theft from Vehicle type crimes Map of Year 2003, 2011, and 2016
+```{r}
+
+#crime_n <- crime %>% filter(HUNDRED_BLOCK %in% "OFFSET TO PROTECT PRIVACY")
+## Theft from Vehicle Map of Year 2003
+
+crime_tv_2003 <- crime %>% filter(YEAR %in% "2003") %>% filter(TYPE %in% "Theft from Vehicle")
+
+# Read in the data
+rawdata1 <- data.frame(as.numeric(crime_tv_2003$Longitude), as.numeric(crime_tv_2003$Latitude))
+names(rawdata1) <- c("lon", "lat")
+data1 <- as.matrix(rawdata1)
+
+# Rotate the lat-lon coordinates using a rotation matrix
+# Trial and error lead to pi/15.0 = 12 degrees
+theta = pi/15.0
+m = matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), nrow=2)
+data1 <- as.matrix(data1) %*% m
+
+# Reproduce William's original map
+#par(bg='black')
+#plot(data, cex=0.1, col="white", pch=16)
+
+# Create heatmap with kde2d and overplot
+k <- kde2d(data1[,1], data1[,2], n=500)
+a <- kde2d(data1[,1], data1[,2], n=500)
+# Intensity from green to red
+cols <- rev(colorRampPalette(brewer.pal(8, 'BrBG'))(10000))
+#par(bg='white')
+#image(k, col=cols, xaxt='n', yaxt='n')
+#points(data1, cex=0.1, pch=16)
+
+# Mapping via RgoogleMaps
+# Find map center and get map
+center <- rev(sapply(rawdata1, mean))
+map <- GetMap(center=center, zoom=12)
+
+# Translate original data
+coords1 <- LatLon2XY.centered(map, rawdata1$lat, rawdata1$lon, 11)
+coords1 <- data.frame(coords1)
+
+# Rerun heatmap
+#k2 <- kde2d(coords$newX, coords$newY, n=500)
+
+# Create exponential transparency vector and add
+alpha <- seq.int(0.5, 0.95, length.out=100)
+alpha <- exp(alpha^6-1)
+cols2 <- AddAlpha(cols, alpha)
+
+# Plot
+PlotOnStaticMap(map)
+#image(k2, col=cols2, add=T)
+points(coords1$newX, coords1$newY, pch=16, cex=0.3) 
+
+#-----------------------------------------------------#
+
+crime_tv_2011 <- crime %>% filter(YEAR %in% "2011") %>% filter(TYPE %in% "Theft from Vehicle")
+
+# Read in the data
+rawdata2 <- data.frame(as.numeric(crime_tv_2011$Longitude), as.numeric(crime_tv_2011$Latitude))
+names(rawdata2) <- c("lon", "lat")
+data2 <- as.matrix(rawdata2)
+
+# Rotate the lat-lon coordinates using a rotation matrix
+# Trial and error lead to pi/15.0 = 12 degrees
+theta = pi/15.0
+m = matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), nrow=2)
+data2 <- as.matrix(data2) %*% m
+
+# Reproduce William's original map
+#par(bg='black')
+#plot(data, cex=0.1, col="white", pch=16)
+
+# Create heatmap with kde2d and overplot
+k <- kde2d(data2[,1], data2[,2], n=500)
+b <- kde2d(data2[,1], data2[,2], n=500)
+# Intensity from green to red
+cols <- rev(colorRampPalette(brewer.pal(8, 'BrBG'))(10000))
+#par(bg='white')
+#image(k, col=cols, xaxt='n', yaxt='n')
+#points(data2, cex=0.1, pch=16)
+
+# Mapping via RgoogleMaps
+# Find map center and get map
+center <- rev(sapply(rawdata2, mean))
+map <- GetMap(center=center, zoom=12)
+
+# Translate original data
+coords2 <- LatLon2XY.centered(map, rawdata2$lat, rawdata2$lon, 11)
+coords2 <- data.frame(coords2)
+
+# Rerun heatmap
+#k2 <- kde2d(coords$newX, coords$newY, n=500)
+
+# Create exponential transparency vector and add
+alpha <- seq.int(0.5, 0.95, length.out=100)
+alpha <- exp(alpha^6-1)
+cols2 <- AddAlpha(cols, alpha)
+
+# Plot
+PlotOnStaticMap(map)
+#image(k2, col=cols2, add=T)
+points(coords2$newX, coords2$newY, pch=16, cex=0.3)
+
+#------------------------------------------------#
+
+
+crime_tv_2016 <- crime %>% filter(YEAR %in% "2016") %>% filter(TYPE %in% "Theft from Vehicle")
+
+# Read in the data
+rawdata3 <- data.frame(as.numeric(crime_tv_2016$Longitude), as.numeric(crime_tv_2016$Latitude))
+names(rawdata3) <- c("lon", "lat")
+data3 <- as.matrix(rawdata3)
+
+# Rotate the lat-lon coordinates using a rotation matrix
+# Trial and error lead to pi/15.0 = 12 degrees
+theta = pi/15.0
+m = matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), nrow=2)
+data3 <- as.matrix(data3) %*% m
+
+# Reproduce William's original map
+#par(bg='black')
+#plot(data, cex=0.1, col="white", pch=16)
+
+# Create heatmap with kde2d and overplot
+k <- kde2d(data3[,1], data3[,2], n=500)
+
+c <- kde2d(data3[,1], data3[,2], n=500)
+# Intensity from green to red
+cols <- rev(colorRampPalette(brewer.pal(8, 'BrBG'))(10000))
+#par(bg='white')
+#image(k, col=cols, xaxt='n', yaxt='n')
+#points(data3, cex=0.1, pch=16)
+
+# Mapping via RgoogleMaps
+# Find map center and get map
+center <- rev(sapply(rawdata3, mean))
+map <- GetMap(center=center, zoom=12)
+
+# Translate original data
+coords3 <- LatLon2XY.centered(map, rawdata3$lat, rawdata3$lon, 11)
+coords3 <- data.frame(coords3)
+
+# Rerun heatmap
+#k2 <- kde2d(coords$newX, coords$newY, n=500)
+
+# Create exponential transparency vector and add
+alpha <- seq.int(0.5, 0.95, length.out=100)
+alpha <- exp(alpha^6-1)
+cols2 <- AddAlpha(cols, alpha)
+
+# Plot
+PlotOnStaticMap(map)
+#image(k2, col=cols2, add=T)
+points(coords3$newX, coords3$newY, pch=16, cex=0.3)
+```
+
+## Heat Map: Theft from Vehicle type crimes of Year 2003, 2011, and 2016
+```{r}
+
+image(a, col=cols, xaxt='n', yaxt='n') +
+points(data1, cex=0.1, pch=16)
+
+
+image(b, col=cols, xaxt='n', yaxt='n') +
+points(data2, cex=0.1, pch=16)
+
+image(c, col=cols, xaxt='n', yaxt='n') +
+points(data3, cex=0.1, pch=16)
+  
+```
+* Due to large volume of incidents, I present 3 maps of 2003, 2011, 2016 to manifest the crime rate for Theft from Vehicle over years 
+
+* Theft from Vehicle type plays a major role in annual trend of crime and year 2003 is the first year of the survey, year 2011 is the year with the least crime incidents, and year 2016 is the last year of data with the full year data and most recent
+
+* The graphs show the overall crime rate trend through years
+, we can see how the crime rate has been changes 
+
+* As the maps show, most crime incidents occur downtown, downtown east side, and south region of downtown vicinity
+
+
+
+
+

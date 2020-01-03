@@ -1,0 +1,107 @@
+---
+title: "Toy sales, average income of consumers and population of 8 major cities of United States"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    
+---
+
+```{r echo = FALSE}
+# Course: 5210 Communicating Data
+# Date: November, 2019
+# Author: Ki Min Lee
+
+```
+
+```{r echo = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE)) 
+
+# Clear environmet of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+
+```
+
+
+```{r setup, include=FALSE}
+
+# Load packages
+library(tidyverse)
+library(dplyr)
+library(ggplot2) 
+library(gridExtra) # use to put graphs together in the same frame
+library(scales)    # use to improve colors
+library(janitor)  # piping function
+library(sf)       # possible geomap
+library(kableExtra)    # clean table design
+library(GGally) #used to display ggpairs
+library(knitr)
+library(treemapify)
+library(ggthemes)
+library(shiny)
+```
+
+```{r}
+# Load data
+toy <- read.csv("toy_dataset.csv")
+
+popl <- data.frame("City" = c("New York City", "Los Angeles", "San Diego", "Mountain View", "Boston", "Austin", "Washington D.C.", "Dallas"), "Population_in_1000" = c(8623, 4000, 1420, 81, 685, 951, 633, 1341))
+# Create data frame of population of 8 cities; data obtained from wikipedia
+
+```
+    
+Row {data-height=700}
+-----------------------------------------------------------------------
+
+### Toy Sales Record
+
+```{r}
+ggplot(toy, aes(x = reorder(City, table(City)[City]))) + geom_bar(aes(fill = City)) + theme_classic() + scale_fill_manual(values = c("gray", "gray", "green", "gray", "purple", "light blue", "red", "gray"), guide = FALSE) +  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) +
+  labs(title = "Toy Sales of Major Cities", subtitle = "Toy Sales Records of 8 Major Cities of United States", y = "Toy Sales" , x = "") +
+  geom_text(stat='count', aes(label=..count..), vjust=-0.25) + ylim(0, 55000) +
+  annotate("text", x = 7.95, y = 25000, label = "New York", angle = 90, size = 4, color = "red")
+```
+
+### Average Income of Consumers of Each City
+
+```{r}
+ggplot(toy, aes(x = reorder(City,Income/10), y = Income/10)) + geom_bar(position = 'dodge', stat = 'summary', fun.y = 'mean', aes(fill=City)) + 
+  theme_classic() + scale_fill_manual(values = c("gray", "gray", "green", "gray", "purple", "light blue", "red", "gray"), guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) + labs(title = "Average Income of Major Cities", subtitle = "Mean Income of 8 Major Cities of United States", y = "Average Income in 10" , x = "") + scale_y_continuous(labels=dollar_format(prefix="$")) + stat_summary(aes(label=round(..y..,0)), fun.y=mean, geom="text", size=4,
+             vjust = -0.25) + ylim(0, 14000) +
+  annotate("text", x = 5.95, y = 4600, label = "New York", angle = 90, size = 4, color = "red")
+```
+
+### Population of Cities
+
+```{r}
+ggplot(popl, aes(x = reorder(City,Population_in_1000), y = Population_in_1000, label = Population_in_1000)) + geom_bar(position = 'dodge', stat = 'summary', fun.y = 'mean', aes(fill=City)) + theme_classic() + scale_fill_manual(values = c("gray", "gray", "green", "gray", "purple", "light blue", "red", "gray"), guide = FALSE) + theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_text(colour = "blue")) + labs(title = "Population of Major Cities", subtitle = "Toy Sales Records of Eight Major Cities of United States", y = "Population in 1000" , x = "") + geom_text(aes(label=Population_in_1000), position=position_dodge(width=0.9), vjust=-0.25) +
+  annotate("text", x = 7.95, y = 4500, label = "New York", angle = 90, size = 4, color = "red")
+```
+
+
+Inputs {.sidebar}
+-------------------------------------
+### Findings
+
+* N.Y: Highest toy sales and population. Third highest average income.
+
+* Mountain View: Least populated, highest average income, third most toy sales.
+
+* San Diego: Second highest Income with moderate population. Least toy sales.
+
+* Dallas: Lowest average income with large population. Third highest toy sales.
+
+
+
+Row {data-height=300}
+-----------------------------------------------------------------------
+
+### Suggestions
+
+1. N.Y & L.A: More advertisement and aggresive sales strategy including frequent promotions (large market size)
+2. Mountain View: Promote high-end products at high price (Low population/strong purchase power of consumers)
+3. San Diego: Step back and watch the market trend for a while (Consumers do not share interest in toys)
+4. Dallas: Sell more toys at reasonable price (Consumers are willing to buy more within their budget)
+
+
